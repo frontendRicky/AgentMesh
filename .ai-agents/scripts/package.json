@@ -1,0 +1,26 @@
+{
+  "name": "a2a-agent-runner",
+  "version": "1.1.0",
+  "description": "A2A Agent Orchestrator via Cursor SDK",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx start-task.ts",
+    "resume": "tsx resume-task.ts",
+    "pm": "tsx run-agent.ts pm",
+    "architect": "tsx run-agent.ts architect",
+    "developer": "tsx run-agent.ts developer",
+    "qa": "tsx run-agent.ts qa",
+    "controller": "tsx run-agent.ts controller"
+  },
+  "dependencies": {
+    "@cursor/sdk": "latest",
+    "@inquirer/prompts": "latest",
+    "chalk": "latest",
+    "gray-matter": "latest"
+  },
+  "devDependencies": {
+    "tsx": "latest",
+    "@types/node": "latest"
+  }
+}

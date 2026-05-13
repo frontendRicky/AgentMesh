@@ -1,0 +1,17 @@
+---
+description: 当用户要求使用 A to A 方式实现需求时，按固定多角色编排执行。
+alwaysApply: true
+---
+
+# A to A 工作流
+
+当用户说“使用 a to a 的方式实现...”“用 A to A 做...”“按多角色协作实现...”时，按以下流程执行：
+
+1. 主 Agent 充当 orchestrator，不直接跳过分析阶段。
+2. 默认使用 `.cursor/agents/` 下的 `planner`、`architect`、`implementer`、`verifier` 四个角色。
+3. 先做 `planner` 与 `architect` 阶段，再汇总出目标、范围、验收标准、改动文件和验证方式。
+4. 进入 `implementer` 阶段时，只做最小必要改动，不主动扩大任务范围。
+5. 完成后必须按 `verifier` 口径输出：已完成项、验证结果、剩余风险。
+6. 若需求很小，允许减少显式“角色对话”展示，但四阶段思路不能省略。
+7. 若子 Agent 不可用，主 Agent 也要按同样的四角色模板模拟执行。
+8. 除非用户明确要求，否则不要 commit、push 或创建 MR。

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Senior Frontend Developer Agent
+# Usage: ./developer "按 file-change-plan 实现 XXX"
+set -e
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec npx --prefix "$DIR" tsx "$DIR/run-agent.ts" developer "$@"

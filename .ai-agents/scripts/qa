@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# QA Tester Agent
+# Usage: ./qa "对 XXX 做测试验收"
+set -e
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec npx --prefix "$DIR" tsx "$DIR/run-agent.ts" qa "$@"

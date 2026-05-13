@@ -1,0 +1,50 @@
+# ─── macOS ──────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+.eggs/
+*.egg
+.venv/
+venv/
+env/
+
+# ─── Node / TypeScript ───────────────────────────────────────────────────────
+node_modules/
+.npm/
+*.tsbuildinfo
+
+# ─── A2A workspace task files ────────────────────────────────────────────────
+# Workspace task dirs (T-YYYY-NNN) are project-specific and should NOT be
+# committed to the protocol/runtime repo.
+# Keep: workspace/.gitkeep and workspace/active-task.md (template, null state)
+.ai-agents/workspace/T-*/
+
+# ─── Cursor IDE internal files ───────────────────────────────────────────────
+# plans/ are IDE-generated workspace planning artifacts, not deliverables
+.cursor/plans/
+# Keep: .cursor/rules/ai-agents.mdc (project rule, IS a deliverable)
+
+# ─── Environment / secrets ───────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.json
+credentials.json

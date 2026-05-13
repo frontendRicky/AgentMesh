@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Flow Controller Agent
+# Usage: ./controller "启动 Task / 推进状态 / ..."
+set -e
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec npx --prefix "$DIR" tsx "$DIR/run-agent.ts" controller "$@"

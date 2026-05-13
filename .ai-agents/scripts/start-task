@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# A2A — 一键启动 Task 编排
+set -e
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec npx --prefix "$DIR" tsx "$DIR/start-task.ts" "$@"
