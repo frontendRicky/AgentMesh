@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+# sync-skills — Sync Prompt Engineer Skills from .ai-agents/skills-source/ to multi-end targets.
+#
+# Single source of truth:  .ai-agents/skills-source/
+# Targets (always):        ~/.cursor/skills/, ~/.agents/skills/
+# Targets (if exists):     ~/.codex/skills/
+#
+# Default mode is DRY RUN. Pass --yes to actually write.
+# Pass --clean to also remove stale managed skills from targets.
+# Only touches `prompt-*` and `shared` inside each target. Never touches other skills.
+
+set -euo pipefail
+
+# ---------- Resolve paths ----------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"   # .ai-agents/
+SOURCE_DIR="${PROJECT_ROOT}/skills-source"
+
+# ---------- Managed skill names (must match dir names in skills-source) ----------
+MANAGED_SKILLS=(
+  prompt-engineer-router
+  prompt-engineer-checklist
+  prompt-frontend-api-integration
+  prompt-frontend-bugfix
+  prompt-frontend-page-refactor
+  prompt-frontend-qa
+  prompt-a2a-workflow
+  shared
+)
+
+# ---------- Targets ----------
+TARGETS=("${HOME}/.cursor/skills" "${HOME}/.agents/skills")
+if [[ -d "${HOME}/.codex/skills" ]]; then
+  TARGETS+=("${HOME}/.codex/skills")
+fi
+
+# ---------- Flags ----------
+DRY_RUN=true
+CLEAN=false
+for arg in "$@"; do
+  case "$arg" in
+    --yes)   DRY_RUN=false ;;
+    --clean) CLEAN=true ;;
+    -h|--help)
+      cat <<EOF
+sync-skills — Sync Prompt Engineer Skills from a single source to multi-end targets.
+
+Usage:
+  $(basename "$0")                # dry-run (default)
+  $(basename "$0") --yes          # actually write
+  $(basename "$0") --clean        # also list stale skills (dry-run)
+  $(basename "$0") --yes --clean  # actually write + remove stale
+
+Source:
+  ${SOURCE_DIR}
+
+Targets:
+  ~/.cursor/skills/   (always)
+  ~/.agents/skills/   (always)
+  ~/.codex/skills/    (only if exists)
+
+Managed names (each target):
+  ${MANAGED_SKILLS[*]}
+
+Notes:
+  - Only the names above are managed. Other skills in targets are NEVER touched.
+  - --clean removes ONLY managed names that no longer exist in source.
+  - Auto-creates target directories if missing.
+EOF
+      exit 0
+      ;;
+    *)
+      echo "Unknown arg: $arg (use --help)" >&2
+      exit 2
+      ;;
+  esac
+done
+
+# ---------- Helpers ----------
+red()    { printf '\033[31m%s\033[0m' "$*"; }
+green()  { printf '\033[32m%s\033[0m' "$*"; }
+yellow() { printf '\033[33m%s\033[0m' "$*"; }
+blue()   { printf '\033[34m%s\033[0m' "$*"; }
+dim()    { printf '\033[2m%s\033[0m' "$*"; }
+
+in_managed() {
+  local name="$1"
+  local m
+  for m in "${MANAGED_SKILLS[@]}"; do
+    [[ "$m" == "$name" ]] && return 0
+  done
+  return 1
+}
+
+# ---------- Preflight ----------
+if [[ ! -d "$SOURCE_DIR" ]]; then
+  echo "$(red ERROR): source dir not found: $SOURCE_DIR" >&2
+  exit 1
+fi
+
+# Verify all managed skills exist in source
+missing=0
+for s in "${MANAGED_SKILLS[@]}"; do
+  if [[ ! -d "${SOURCE_DIR}/${s}" ]]; then
+    echo "$(red MISSING): ${SOURCE_DIR}/${s}" >&2
+    missing=1
+  fi
+done
+if [[ $missing -ne 0 ]]; then
+  echo "$(red ERROR): some managed skills are missing in source. Aborting." >&2
+  exit 1
+fi
+
+# ---------- Banner ----------
+MODE="$([[ "$DRY_RUN" = true ]] && echo "$(yellow 'DRY RUN')" || echo "$(green 'WRITE')")"
+CLEANTXT="$([[ "$CLEAN" = true ]] && echo "$(yellow on) " || echo "off")"
+
+cat <<EOF
+
+────────────────────────────────────────────────────────
+ sync-skills
+────────────────────────────────────────────────────────
+ Mode:    ${MODE}
+ Clean:   ${CLEANTXT}
+ Source:  ${SOURCE_DIR}
+ Targets:
+EOF
+for t in "${TARGETS[@]}"; do
+  echo "   - $t"
+done
+echo "────────────────────────────────────────────────────────"
+
+# ---------- Per-target plan ----------
+TOTAL_CREATE=0
+TOTAL_UPDATE=0
+TOTAL_SKIP=0
+TOTAL_CLEAN=0
+
+for target in "${TARGETS[@]}"; do
+  echo ""
+  echo "$(blue '▶ Target:') $target"
+
+  if [[ ! -d "$target" ]]; then
+    echo "  [CREATE DIR] $target"
+    if [[ "$DRY_RUN" = false ]]; then
+      mkdir -p "$target"
+    fi
+  fi
+
+  # Sync each managed skill
+  for skill in "${MANAGED_SKILLS[@]}"; do
+    src="${SOURCE_DIR}/${skill}"
+    dst="${target}/${skill}"
+
+    if [[ -d "$dst" ]]; then
+      if diff -rq "$src" "$dst" >/dev/null 2>&1; then
+        echo "  [$(dim SKIP)]    $skill"
+        ((TOTAL_SKIP+=1))
+      else
+        echo "  [$(yellow UPDATE)]  $skill"
+        # show file-level diff summary, up to 6 lines
+        diff -rq "$src" "$dst" 2>/dev/null | sed 's|^|           |' | head -6
+        if [[ "$DRY_RUN" = false ]]; then
+          rm -rf "$dst"
+          cp -R "$src" "$dst"
+        fi
+        ((TOTAL_UPDATE+=1))
+      fi
+    else
+      echo "  [$(green CREATE)]  $skill"
+      if [[ "$DRY_RUN" = false ]]; then
+        cp -R "$src" "$dst"
+      fi
+      ((TOTAL_CREATE+=1))
+    fi
+  done
+
+  # --clean: scan managed-name space in target for entries no longer in source
+  if [[ "$CLEAN" = true ]]; then
+    shopt -s nullglob
+    for entry in "$target"/*; do
+      [[ -d "$entry" ]] || continue
+      name="$(basename "$entry")"
+      case "$name" in
+        prompt-*|shared) ;;
+        *) continue ;;
+      esac
+      if in_managed "$name"; then
+        continue
+      fi
+      echo "  [$(red CLEAN)]   $name $(dim '(stale, not in source)')"
+      if [[ "$DRY_RUN" = false ]]; then
+        rm -rf "$entry"
+      fi
+      ((TOTAL_CLEAN+=1))
+    done
+    shopt -u nullglob
+  fi
+done
+
+# ---------- Footer ----------
+echo ""
+echo "────────────────────────────────────────────────────────"
+echo " Summary"
+echo "────────────────────────────────────────────────────────"
+printf "  create: %d   update: %d   skip: %d   clean: %d\n" \
+  "$TOTAL_CREATE" "$TOTAL_UPDATE" "$TOTAL_SKIP" "$TOTAL_CLEAN"
+echo ""
+
+if [[ "$DRY_RUN" = true ]]; then
+  echo "$(yellow 'DRY RUN finished. Nothing was written.')"
+  echo ""
+  echo "Next steps:"
+  echo "  - Run with $(green '--yes')         to apply changes."
+  if [[ "$CLEAN" = false ]]; then
+    echo "  - Add $(green '--clean')          to also remove stale managed skills."
+  fi
+else
+  echo "$(green 'Sync complete.')"
+fi
+echo ""
