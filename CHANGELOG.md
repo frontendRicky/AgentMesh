@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## Unreleased — Per-Agent Model Override
+
+### Added
+
+- Markdown checklist override file `.ai-agents/agent-cards/model-overrides.md` lets users tick `- [x] <model-slug>` per role to switch the recommended model for PM / Architect / Developer / QA / Controller / Risk.
+- Per-agent card frontmatter accepts an optional `model: <slug>` field as a fallback override source.
+- CLI `--model <slug>` flag on `prompt` and `model recommend` for one-off overrides.
+- `ModelSelectionResult.override_source` now reports `cli` / `overrides_file` / `agent_card` / `default` so prompts and `model list` can show which layer provided the model.
+- `model list` prints the active overrides table read from `model-overrides.md`.
+
+### Override Priority
+
+CLI `--model` > `model-overrides.md` body checklist > `model-overrides.md` frontmatter `overrides:` > per-agent card `model:` frontmatter > hardcoded `DEFAULT_MODEL_PREFERENCES`.
+
+### Safety
+
+- High-risk escalation policy still wins: P0/P1 contexts force-upgrade weak overrides to a high-reasoning model and emit a warning. Override never bypasses risk policy.
+- Codex tool context still rejects non-Codex-compatible model slugs and emits a warning when an override is incompatible.
+- Runtime still does not call real LLM, switch Cursor models, or execute Codex commands. Overrides only change the recommended-model text in generated prompts.
+
+### Tests
+
+- `tests/test_model_override.py` covers checklist parsing (single / multi / none / commented / fenced), priority resolution, high-risk escalation, Codex-compat warnings, and CLI surface.
+
 ## 0.1.0rc5 — Pilot Safety Fixes
 
 ### Fixed

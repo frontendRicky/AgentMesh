@@ -38,6 +38,18 @@ Runtime can recommend a model for each Agent, but it does not call LLM APIs and 
 - Cursor prompts include a manual model-selection instruction.
 - Codex prompts and `model recommend --tool codex` include a copyable `codex --model ...` command hint, but Runtime never executes it.
 
+### Manual Model Override
+
+Defaults can be overridden per agent in three layers (highest priority first):
+
+1. CLI: `prompt <role> --model <slug>` or `model recommend --agent <role> --model <slug>`.
+2. Centralized override file: `.ai-agents/agent-cards/model-overrides.md` — tick `- [x] <model-slug>` under each `## <role>` heading. Listed slugs match the runtime defaults; you can also write a custom slug or use the `overrides:` mapping in the file's frontmatter.
+3. Per-agent card: optional `model: <slug>` field in `.ai-agents/agent-cards/<role>.card.md` frontmatter.
+
+`model list` shows the active overrides table. `ModelSelectionResult.override_source` reports `cli` / `overrides_file` / `agent_card` / `default` so prompts make the source explicit.
+
+Safety: P0/P1 risk contexts always force a high-reasoning model — overrides for those contexts are upgraded with a warning, never bypassed. Codex tool context still rejects non-Codex-compatible slugs.
+
 ## What Runtime Does
 
 - Executes the Markdown A2A v1.0.0 task protocol locally.

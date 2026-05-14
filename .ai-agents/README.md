@@ -49,7 +49,7 @@
   CHANGELOG.md               协议版本变更
   a2a/                       8 套 Schema + 协议总章 + State Machine + File Bus
   agents/                    5 份 Agent 行为定义（人类可读）
-  agent-cards/               5 份机器可读 Agent Card
+  agent-cards/               5 份机器可读 Agent Card + model-overrides.md（手动模型切换）
   handoffs/                  6 份 Handoff Contract
   flows/                     6 条 Flow（feature/refactor/bugfix/ui-redesign/permission/api-integration）
   rules/                     7 份规则
@@ -105,7 +105,27 @@ human_owner: <你的 handle>
 
 ---
 
-## 6. 协议版本
+## 6. 模型选择（Per-Agent Model Override）
+
+各 Agent 默认模型见 `a2a_runtime/services/model_selection_service.py` 中的 `DEFAULT_MODEL_PREFERENCES`。手动切换走 4 级优先级（高 → 低）：
+
+1. CLI `--model <slug>`（一次性）
+2. [agent-cards/model-overrides.md](agent-cards/model-overrides.md) 的 body checklist `- [x] <slug>`，未勾选则 fallback frontmatter `overrides:` 映射
+3. 各 `agent-cards/<role>.card.md` frontmatter 的可选 `model: <slug>` 字段
+4. 默认偏好
+
+不变项：
+
+- A2A schema 与冻结声明全部不变
+- P0/P1 高风险强制升级到 high-reasoning 模型，**不可被 override 绕过**
+- Codex tool context 仍拒绝非 codex-compatible slug
+- Runtime 仍不调用 LLM、不切换 Cursor 模型、不执行 Codex
+
+详 [.cursor/rules/ai-agents.mdc](../.cursor/rules/ai-agents.mdc) §16、[rules/cursor-rules.md](rules/cursor-rules.md) §14。
+
+---
+
+## 7. 协议版本
 
 当前：`a2a/v1`，**版本号 `v1.0.0`，已于 2026-05-11 冻结**。
 

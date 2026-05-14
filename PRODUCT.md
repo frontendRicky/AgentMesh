@@ -26,6 +26,7 @@
 - **两阶段 Blocker**：专业 Agent 只能发 `blocker-request`，正式 Blocker 只能由 Controller 创建
 - **P0/P1 Risk Gate**：P0/P1 风险必须显式人工决策，Final Delivery 前必须清零
 - **模型推荐**：`model recommend --agent <pm|architect|developer|qa|controller> --tool <cursor|codex>`，只输出建议，不执行
+- **手动模型切换**：`.ai-agents/agent-cards/model-overrides.md` 用 markdown checklist `- [x] <slug>` 给每个 Agent 选模型；CLI `--model <slug>` 一次性 override；P0/P1 风险仍强制升级 high-reasoning 模型，override 不可绕过
 - **报告导出**：`report` 打印完整运行态，`--output` 导出到 task archive
 - **`--dry-run` / `--yes` 双模式**：所有写操作先 dry-run 预览，确认再 `--yes` 落盘
 
@@ -89,7 +90,7 @@ start-task → Controller 创建 Task → PM 写需求产物 → Architect 写�
 |---|---|
 | `a2a/` | 14 个 Schema（state / blocker / review / message / task / artifact / file-change-plan / handoff-contract 等）|
 | `agents/` | 5 份 Agent 行为定义（PM / Architect / Developer / QA / Controller）|
-| `agent-cards/` | 5 份机器可读权限卡（writable_paths 白名单）|
+| `agent-cards/` | 5 份机器可读权限卡（writable_paths 白名单）+ `model-overrides.md`（手动切模型 checklist）|
 | `handoffs/` | 6 份 Handoff Contract（user→PM / PM→Arch / Arch→HumanReview / HumanReview→Dev / Dev→QA / QA→FinalReview）|
 | `flows/` | 6 条 Flow（feature / refactor / bugfix / ui-redesign / permission / api-integration）|
 | `rules/` | 7 份规则（a2a-rules / cursor-rules / code-change-rules / frontend-rules / global-rules / review-rules / test-rules）|

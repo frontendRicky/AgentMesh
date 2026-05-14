@@ -2,6 +2,40 @@
 
 本系统按 `schema_version` 演进，重大调整须升级 `a2a/v*` 版本号。
 
+## v1.0.0 兼容扩展 — 2026-05-14（Per-Agent Model Override）
+
+性质：**协议向后兼容的运行时扩展**，未升级 schema_version，未破坏 v1.0.0 冻结声明。
+
+新增工件：
+
+- `agent-cards/model-overrides.md`：用户级模型选择文件，支持 `## <role>` + `- [x] <model-slug>` checklist 语法
+- 各 `agent-cards/<role>.card.md` frontmatter 新增可选 `model:` 字段（fallback 用，留空即不生效）
+
+新增字段：
+
+- `AgentCard.model: str | None`（agent-card schema 向后兼容，旧卡片无此字段仍可用）
+- `ModelSelectionResult.override_source: str`（`cli` / `overrides_file` / `agent_card` / `default`）
+
+Override 优先级（高 → 低）：
+
+1. CLI `--model <slug>`
+2. `model-overrides.md` body checklist
+3. `model-overrides.md` frontmatter `overrides:` 映射
+4. 各 `<role>.card.md` frontmatter 的 `model:` 字段
+5. `DEFAULT_MODEL_PREFERENCES`（按 role 默认）
+
+不变项：
+
+- A2A schema 全部不变
+- state.md / task.md / message / artifact / blocker / review schema 不变
+- Developer Gate / Human Review 双步 / Blocker 两阶段 / P0/P1 Risk Gate / Final Delivery 全部规则保持
+- P0/P1 风险高推理模型升级策略**不可被 override 绕过**
+- Runtime 仍不调用 LLM、不切换 Cursor 模型、不执行 Codex
+
+详见 [agent-cards/model-overrides.md](agent-cards/model-overrides.md) 与 `.cursor/rules/ai-agents.mdc` §16。
+
+---
+
 ## v1.0.0 — Markdown File-based A2A Protocol Frozen
 
 日期：2026-05-11
