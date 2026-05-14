@@ -1,252 +1,36 @@
 ---
-description: 本地 File-based A2A AI Agents 工作流系统。每次回复必须以 [A2A] 头开始；按 4 步识别 Task；写代码前过 5 条门禁；任何写入 state.md / blockers/ / human-reviews/ / artifacts/final/ 都受严格门禁；区分 blocker_request vs gate_failure；启动时检测双步中间态并自动补做。
+description: A2A 触发器（精简常驻版）。识别用户是否真要走 A2A 流程；只在显式触发时加载完整规则 ai-agents-full，平时不打 [A2A] 头、不读 state.md，按常规对话处理。
 alwaysApply: true
 ---
 
-# .ai-agents A2A 系统 — Cursor 规则
+# A2A 触发器（精简常驻版）
 
-> 本文件的完整人类可读版本在 `.ai-agents/rules/cursor-rules.md` 与 `.ai-agents/rules/a2a-rules.md`。本文件是 Cursor 在每次操作前**必须**遵守的硬约束。
+本项目存在 `.ai-agents/` A2A 多 Agent 工作流系统。完整规则有 250+ 行硬约束，按需加载以节省 token。
 
-## 0. 触发条件
+## 触发条件（满足任一 → 加载完整规则 `ai-agents-full`）
 
-只要 `.ai-agents/` 目录存在，本规则**对所有 Cursor 操作生效**（alwaysApply: true）。
+1. 用户消息显式包含以下任一关键词：`走 A2A` / `启动 A2A` / `A2A Task` / `a2a-agent` / `推进 task` / `跑流程`
+2. 用户消息出现 `[A2A]` 回复头格式
+3. 用户明确要求操作 `.ai-agents/workspace/` 下的 `task.md` / `state.md` / `artifacts/**` / `blockers/**` / `human-reviews/**` / `messages/**`
+4. 用户调用 `a2a-agent` CLI 后让你解读 / 推进结果
 
-## 1. 必读清单（每次操作前）
+## 触发后行为
 
-按顺序 Read：
+主动 fetch `.cursor/rules/ai-agents-full.mdc` 完整内容，按其执行：每次回复以 `[A2A]` 头开头、4 步识别 Task、5 条写代码门禁、Blocker 两阶段、Review 双步等全部硬约束。
 
-1. `.ai-agents/workspace/active-task.md` → 拿 active_task_id
-2. `.ai-agents/workspace/<task-id>/task.md` → 静态元信息
-3. `.ai-agents/workspace/<task-id>/state.md` → **唯一动态状态源**
-4. `.ai-agents/agent-cards/<state.current_agent>.card.md` → 当前 Agent 权限
-5. `.ai-agents/agents/<state.current_agent>.agent.md` → 当前 Agent 工作流
+## 不触发时的行为
 
-> **task_id 与目录名严格一致**（F-01）。task_id 必须匹配 `^T-\d{4}-\d{3}$`（F-03）；目录名必须 == task_id（如 `T-2026-002` → `workspace/T-2026-002/`）。**禁止** `example-task` / `demo-task` / `T-YYYY-XXX` 作为运行目录或 task_id。
+- **不**打 `[A2A]` 头
+- **不**读 `state.md` / `task.md`
+- **不**强制双步流转 / 双门禁等 A2A 规则
+- 按常规 Cursor 对话处理（仍受其他通用规则约束，如 quality-gate / code-format-generation 等）
 
-## 2. 每次回复必须以 [A2A] 头开始
+## 不确定时的兜底
 
-格式严格如下，不允许变形：
+如用户意图模糊（既像普通问题又像 A2A 操作），先按常规处理；若回答中需要触碰 `.ai-agents/workspace/` 内容，再加载 `ai-agents-full` 后重新组织答复。**宁可漏触发再补，不要默认每次都拉完整规则。**
 
-```
-[A2A]
-- Current Agent: <pm | architect | developer | qa | controller | human>
-- Current Task: <task_id 或 none>
-- Current Status: <state.current_status>
-- Human Review Status: <state.human_review_status>
-- Reading Artifacts: [<artifact-id>, ...]
-- Producing Artifacts: [<artifact-id>, ...]
-- May Write Code: yes | no, 原因
-```
+## 边界
 
-无 active-task 时：
-
-```
-[A2A]
-- Current Agent: none
-- Current Task: none
-- Current Status: none
-- Human Review Status: none
-- Reading Artifacts: []
-- Producing Artifacts: []
-- May Write Code: no, 当前无 active-task
-```
-
-> **role enum 严格 6 选 1**：`pm` / `architect` / `developer` / `qa` / `controller` / `human`。**禁止** 使用 `dev` 作为 role。
-
-## 3. Task 识别 4 步严格优先级
-
-按顺序判断当前 Task：
-
-1. 用户 Prompt 中显式指定的 task_id（最高优先级）
-2. `.ai-agents/workspace/active-task.md` 中的 active_task_id（非 null）
-3. workspace 中只有一个 Task → 使用该 Task
-4. 多个 Task 且 active 为 null → **必须通过对话询问用户**，**不允许猜测**
-
-> 任何被识别的 task_id 都要先过 `^T-\d{4}-\d{3}$` 校验；不通过 → 拒绝继续，要求 Controller 重建。
-
-## 4. State 读取规则
-
-- 每次操作前**必须**重新 Read `state.md`，不能依赖上次缓存
-- task.md 与 state.md 字段冲突时，以 state.md 为准
-- state.md 缺失 → 拒绝任何写操作 → 在对话中明示
-
-## 4.5 Controller 启动自检（中间态自动恢复 — F-08）
-
-每次 Controller 被激活时（用户对话激活、收到 message 触发），**首先**跑场景 0（启动自检）：
-
-```
-读 state.md →
-  if (current_status == 'human_review_required' AND human_review_status == 'approved'):
-      重新校验 architect-review.md (verdict=approved + 字段完整)
-      → 自动补做第 2 步：current_status = developer_processing, current_agent = developer, next_agent = qa
-      → 写 from-controller-<seq>-recover-handoff.md
-      → [A2A] 头中明示"中间态已补做"
-
-  if (current_status == 'final_review_required' AND final_review_status == 'approved'):
-      重新校验 final-review.md (verdict=approved + 字段完整)
-      → 自动补做第 2 步：current_status = completed, current_agent = controller
-      → 写 final-delivery.md (走第 9 节门禁)
-      → 写 from-controller-<seq>-final.md
-
-  if (current_status == 'blocked' AND blocked_context == null):
-      异常态,拒绝任何推进,等待用户干预
-```
-
-详 `.ai-agents/agents/flow-controller.agent.md §4 场景 0`、`.ai-agents/a2a/state.schema.md §2.5`。
-
-## 5. 写代码 5 条门禁（最重要）
-
-任何 Write / StrReplace / Delete 项目源码前**必须**逐项自检：
-
-1. `state.current_status == developer_processing` ✓
-2. `state.human_review_status == approved` ✓
-3. 当前 Agent role == `developer` ✓
-4. 待修改路径在 `artifacts/architect/file-change-plan.md` 白名单中且 `operation` ∈ {create, modify, delete} 且 `allowed == yes` ✓
-5. 待修改路径不属于默认禁改集（`package.json` / `package-lock.json` / `pnpm-lock.yaml` / `yarn.lock` / `.github/**` / `.gitlab-ci.yml` / `Dockerfile` / CI 配置），除非 file-change-plan 显式 `allowed: yes` 且 `owner: user-approved` ✓
-
-**任一不满足 → 立即停止 → 按以下分类报告**：
-
-| 失败类型 | 用什么 message_type | Controller 后续动作 |
-|---|---|---|
-| 条件 4 失败（路径不在白名单） — **真实流程阻塞** | `messages/from-developer-<seq>-blocker-request.md`（`message_type: blocker`，`intent: blocker_request`） | 走场景 D：创建正式 Blocker、改 state 为 blocked、写 blocked_context |
-| 条件 1 / 2 / 3 失败（Agent 误启动，state 处于错误阶段） — **门禁失败留痕** | `messages/from-developer-<seq>-gate-failure-request.md`（`message_type: gate_failure`，`intent: write_gate_failed`） | 走场景 D'：**不**创建 Blocker、**不**改 state，仅在对话中提示用户先完成审核 / 等待 state 推进 |
-| 条件 5 失败（默认禁改集，缺 user-approved） | `messages/from-developer-<seq>-blocker-request.md` | 走场景 D：proposed_resume_to_agent: architect / user |
-
-**严禁** 把 gate_failure 用 `message_type: blocker` 上报，那会让 Controller 误创建 Blocker（详 `.ai-agents/a2a/message.schema.md §2.1`）。
-
-## 6. Agent Card 加载规则
-
-- 加载 `agent-cards/<state.current_agent>.card.md` 后严格按 `writable_paths` 校验
-- 写入路径不在 writable_paths → 拒绝写入 → 写 blocker-request 或 gate-failure-request（按上表）
-
-## 7. Blocker Request 规则（两阶段中的阶段 A）
-
-任一专业 Agent（PM / Architect / Developer / QA）发现**真实流程阻塞**（缺上游 artifact / file-change-plan 缺路径 / 上游决策不一致）：
-
-- **不允许**直接写 `blockers/B-*.md`
-- **不允许**写 `state.md`
-- 必须写 `messages/from-<role>-<seq>-blocker-request.md`（`message_type: blocker`，`intent: blocker_request`）
-- 在对话中明示"已发 blocker-request，等待 Controller 创建正式 Blocker"
-
-> Agent 在错误状态下被误启动 ≠ 真实阻塞 → 用 `gate_failure`，详第 5 节。
-
-正式 `blockers/B-*.md` 与 `state.md` 的 blocked_context / current_status=blocked / active_blocker / blockers_history 唯一由 Flow Controller 创建。
-
-**Blocker 恢复**：Controller 校验 missing_artifacts 已补齐后：
-- `state.current_status = blocked_context.resume_to_status`（按 blocker.schema.md §6 决策）
-- `state.current_agent = blocked_context.resume_to_agent`
-- `state.blocked_context = null`
-- `state.active_blocker = null`
-- **保留** `state.blockers_history`（永久审计，不清空）
-
-## 8. Human Review 规则
-
-- **不允许** Cursor 自行翻 `state.human_review_status` / `state.final_review_status`
-- 用户必须先在对话中给出明确 verdict（approved / rejected / needs_changes）
-- Cursor 按用户指令**代写** `human-reviews/architect-review.md` 或 `human-reviews/final-review.md`（按 review.schema.md，reviewer 字段填用户 handle）
-- 然后召唤 Controller 校验 review record → **双步翻状态**：
-  1. 第一步：state.human_review_status / final_review_status = approved
-  2. 第二步（独立）：state.current_status = developer_processing / completed
-- **禁止**把双步合并
-
-> 若两步之间被中断（如 session 切换），Controller 启动时会按第 4.5 节自动补做第 2 步（F-08）。
-
-## 9. final-delivery 写入门禁
-
-写 `artifacts/final/final-delivery.md` 前必须确认**全部满足**：
-
-- `state.final_review_status == approved`
-- `state.current_status == completed`
-- `human-reviews/final-review.md` 存在且 verdict == approved
-- 当前 Agent role == `controller`
-- test-report 中无未处理 fail
-
-任一不满足 → **拒绝写入** → 在对话中明示原因。
-
-## 10. 多 Task 不猜测
-
-- workspace 中存在多个 Task 且 active-task.md 缺失或 null → **必须**询问用户
-- **不允许**猜测"最近的 Task" / "最新创建的 Task"
-- **不允许**在多 Task 之间隐式切换
-
-## 11. 关键写权限速查表
-
-| 角色 | 可写 |
-|---|---|
-| pm | `artifacts/pm/**`、`messages/from-pm-*.md` |
-| architect | `artifacts/architect/**`、`messages/from-architect-*.md`，**严禁源码 Write** |
-| developer | `artifacts/developer/**`、`messages/from-developer-*.md`（含 blocker-request、gate-failure-request）、命中 file-change-plan 白名单的源码（双门禁后） |
-| qa | `artifacts/qa/**`、`messages/from-qa-*.md`、经 qa-file-change-plan 授权的测试文件，**默认主业务源码只读** |
-| controller | `task.md`（仅创建时）、`state.md`、`blockers/**`、`messages/from-controller-*.md`、`workspace/active-task.md`、`artifacts/final/**`（条件门禁） |
-| human-review-actor | `human-reviews/architect-review.md`、`human-reviews/final-review.md` |
-
-任何角色写出表外的路径 → 拒绝执行 → 写 blocker-request 或 gate-failure-request（按第 5 节分类）。
-
-> **角色名严格 6 选 1**：`pm` / `architect` / `developer` / `qa` / `controller` / `human`。`dev` 是过时别名，全系统已统一 `developer`。
-
-## 12. task.md vs state.md
-
-- `task.md` 仅静态元信息，创建后**不再变更**
-- `state.md` 是**唯一动态状态源**，**仅 Controller 可写**
-- 严禁把 current_status / current_agent / human_review_status / produced_artifacts 等动态字段写进 task.md
-
-## 13. 复用优于新建
-
-- 优先复用现有 component / hook / util / type / service
-- 新建文件必须**预先**在 file-change-plan 中（operation: create + allowed: yes）
-- 实施过程中发现需要新建白名单外的文件 → 写 blocker-request
-
-## 14. 自检触发场景
-
-以下场景 Cursor 必须主动自检并打印 [A2A] 头，不允许"沉默执行"：
-
-- 用户对话出现"启动 Task / 推进 / 写代码 / 审核 / 测试 / 交付"等关键词
-- 用户给出 verdict（approved / rejected / needs_changes）
-- 用户问"现在到哪一步了"
-- Cursor 即将写任何 .ai-agents/ 内文件
-- Cursor 即将写任何项目源码
-
-## 15. 边界声明
-
-本规则与 `.ai-agents/rules/` 下任何规则冲突时，以本规则的硬约束为准（因 .mdc 是 Cursor 直接消费的源）。
-
-如本规则缺漏导致行为不明确，参考完整版：
-
-- `.ai-agents/rules/cursor-rules.md`
-- `.ai-agents/rules/a2a-rules.md`
-- `.ai-agents/rules/global-rules.md`
-- `.ai-agents/a2a/state-machine.md`
-- `.ai-agents/a2a/blocker.schema.md`
-- `.ai-agents/a2a/message.schema.md`（含 §2.1 blocker vs gate_failure）
-- `.ai-agents/a2a/review.schema.md`
-
-## 16. Agent Model Selection（手动 Override）
-
-每个子 Agent 的模型推荐由 `a2a_runtime` 的 `DEFAULT_MODEL_PREFERENCES` 给出，prompt 顶部 `Recommended Model:` 段落渲染该值。**用户可以通过 markdown 文档手动选择模型，不需要改 Python 代码**。
-
-### 解析优先级（高 → 低）
-
-1. CLI `--model <slug>`（一次性，例 `a2a-agent prompt developer --model claude-4.6-sonnet-medium-thinking`）
-2. `.ai-agents/agent-cards/model-overrides.md` 中 `## <role>` 下勾选的 `- [x] <slug>`（**主要 UX**：md checklist）
-3. `.ai-agents/agent-cards/<role>.card.md` frontmatter 的 `model:` 字段
-4. `a2a_runtime/services/model_selection_service.py` 的 `DEFAULT_MODEL_PREFERENCES` 兜底
-
-### checklist 文件约束（model-overrides.md）
-
-- `## <role>` heading 必须用 6 个 role enum：`pm` / `architect` / `developer` / `qa` / `controller` / `risk`
-- 每个 `## <role>` section 下最多勾一个 `- [x]`；勾多个 → runtime 取第一个并发 warning
-- 不勾任何项 = 该 role 走默认推荐
-- 清单里没有的 slug，可以直接加一行 `- [x] your-custom-slug`，runtime 不校验 slug 真伪
-
-### 高风险（P0/P1）行为
-
-- 高风险任务强制升档到高推理模型（cursor → `claude-opus-4-7-thinking-high`，codex → `gpt-5.5`）
-- 你的 override 会被升档策略覆盖，prompt 顶部 `Recommended Model.Warnings` 会明示"已覆盖"
-- 这条策略不可被 override 关闭
-
-### 不变安全边界
-
-- Runtime 仅生成 prompt 段落，**不会自动切换 Cursor 模型**
-- Runtime **不会自动执行 Codex 命令**
-- 任何模型选择最终都需要用户在 Cursor 模型选择器手动选 / 在终端手动跑 `codex --model <slug>`
-- override 文件本身在 `.ai-agents/agent-cards/` 下，**不属于** Agent 写权限白名单（仅用户可改）
+- 不触发 ≠ 关闭 A2A：完整规则始终可用，仅延迟到真正需要时加载
+- 触发器本身（本文件）保持常驻，长度控制在 50 行以内
+- 完整规则 `ai-agents-full.mdc` 的硬约束不变，仅改变加载时机
