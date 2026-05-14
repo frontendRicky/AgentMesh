@@ -9,7 +9,9 @@ alwaysApply: true
 
 ## 触发条件（满足任一 → 加载完整规则 `ai-agents-full`）
 
-1. 用户消息显式包含以下任一关键词：`走 A2A` / `启动 A2A` / `A2A Task` / `a2a-agent` / `推进 task` / `跑流程`
+1. 用户消息显式包含以下任一：
+   - 关键词：`走 A2A` / `启动 A2A` / `A2A Task` / `a2a-agent` / `推进 task` / `跑流程`
+   - **简写开关**（与「走 A2A」等价，避免用户打 `a2a xxx` 却不触发）：整条消息在 trim 后以 `a2a` 或 `A2A` 开头，且紧跟**空白**或**英文逗号**（例：`a2a 1+1`、`A2A, 查状态`）。不要求大小写混写；**不以** `a2a` 后直接黏连中文（如 `a2a是什么`）触发，以免纯概念问答误开
 2. 用户消息出现 `[A2A]` 回复头格式
 3. 用户明确要求操作 `.ai-agents/workspace/` 下的 `task.md` / `state.md` / `artifacts/**` / `blockers/**` / `human-reviews/**` / `messages/**`
 4. 用户调用 `a2a-agent` CLI 后让你解读 / 推进结果
