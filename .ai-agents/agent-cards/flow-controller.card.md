@@ -4,6 +4,7 @@ agent_name: Flow Controller Agent
 role: controller
 version: 1.0.0
 schema_version: a2a/v1
+# model: ""  # optional manual model override; see ./model-overrides.md
 ---
 
 ## description

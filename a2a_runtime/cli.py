@@ -250,12 +250,18 @@ def build_parser() -> argparse.ArgumentParser:
     model_recommend.add_argument("--agent", required=True, choices=["pm", "architect", "developer", "dev", "qa", "controller", "risk"])
     model_recommend.add_argument("--tool", default="generic", choices=["cursor", "codex", "generic"])
     model_recommend.add_argument("--risk", choices=["P0_BLOCKER", "P1_HIGH", "P2_MEDIUM", "P3_LOW", "INFO"])
+    model_recommend.add_argument(
+        "--model",
+        dest="model_override",
+        help="One-off model override (highest priority); overridden by P0/P1 escalation policy.",
+    )
     model_recommend.set_defaults(
         handler=lambda ctx, args: run_model_recommend(
             ctx,
             agent=args.agent,
             tool_context=args.tool,
             risk_level=args.risk,
+            model_override=args.model_override,
         ),
     )
 
@@ -277,6 +283,11 @@ def build_parser() -> argparse.ArgumentParser:
     prompt.add_argument("--operation", choices=["create", "modify", "delete"])
     prompt.add_argument("--tool", default="cursor", choices=["cursor", "codex", "generic"])
     prompt.add_argument("--risk", choices=["P0_BLOCKER", "P1_HIGH", "P2_MEDIUM", "P3_LOW", "INFO"])
+    prompt.add_argument(
+        "--model",
+        dest="model_override",
+        help="One-off model override for this prompt (highest priority); overridden by P0/P1 escalation policy.",
+    )
     prompt.set_defaults(
         handler=lambda ctx, args: run_prompt(
             ctx,
@@ -285,6 +296,7 @@ def build_parser() -> argparse.ArgumentParser:
             operation=args.operation,
             tool_context=args.tool,
             risk_level=args.risk,
+            model_override=args.model_override,
         ),
     )
 

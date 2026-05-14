@@ -22,11 +22,38 @@ LOW_COST_MODELS = {
     "gpt-4.1-mini",
 }
 
+OVERRIDE_PRIORITY_LABELS = {
+    "cli": "CLI --model",
+    "overrides_file": ".ai-agents/agent-cards/model-overrides.md",
+    "agent_card": "agent-card frontmatter `model:`",
+}
+
 
 @dataclass(frozen=True)
 class ModelSelectionService:
     def default_preferences(self) -> dict[str, AgentModelPreference]:
         return DEFAULT_MODEL_PREFERENCES
+
+    def resolve_override(
+        self,
+        *,
+        cli_override: str | None = None,
+        overrides_file_value: str | None = None,
+        agent_card_value: str | None = None,
+    ) -> tuple[str | None, str]:
+        """Pick the highest-priority override and return (model, source).
+
+        Returns (None, "default") when no override is supplied.
+        Empty strings are treated as "no override" so users can leave fields blank.
+        """
+
+        if cli_override and cli_override.strip():
+            return cli_override.strip(), "cli"
+        if overrides_file_value and overrides_file_value.strip():
+            return overrides_file_value.strip(), "overrides_file"
+        if agent_card_value and agent_card_value.strip():
+            return agent_card_value.strip(), "agent_card"
+        return None, "default"
 
     def recommend_for_role(
         self,
@@ -34,6 +61,9 @@ class ModelSelectionService:
         *,
         tool_context: str = "generic",
         risk_level: RiskSeverity | str | None = None,
+        cli_override: str | None = None,
+        overrides_file_value: str | None = None,
+        agent_card_value: str | None = None,
     ) -> ModelSelectionResult:
         canonical_role = normalize_model_policy_role(role)
         context = normalize_tool_context(tool_context)
@@ -43,35 +73,66 @@ class ModelSelectionService:
             raise SchemaError(f"model policy role is not supported: {canonical_role}") from exc
         risk = parse_enum(RiskSeverity, risk_level, "risk_level") if risk_level else None
         warnings: list[str] = []
-        if context == "codex":
-            if preference.codex_model:
-                selected_model = preference.codex_model
-            else:
-                selected_model = CODEX_DEVELOPER_MODEL
-                if preference.primary_model != CODEX_DEVELOPER_MODEL:
-                    warnings.append(
-                        "Codex does not support the primary non-OpenAI model; use gpt-5.5 or run this prompt in Cursor with the recommended model.",
-                    )
-        else:
-            selected_model = preference.primary_model
-        reasoning = preference.reasoning_effort
-        cost = preference.cost_tier
-        rationale = preference.rationale
-        if risk in {RiskSeverity.P0_BLOCKER, RiskSeverity.P1_HIGH}:
-            if context == "codex":
-                selected_model = CODEX_DEVELOPER_MODEL
-                reasoning = "high"
-                cost = "high"
-            elif reasoning != "high" or _is_low_cost_model(selected_model) or preference.cost_tier == "low":
-                selected_model = (
-                    CODEX_DEVELOPER_MODEL
-                    if canonical_role == Role.DEVELOPER.value and context == "codex"
-                    else HIGH_REASONING_MODEL
+
+        override_model, override_source = self.resolve_override(
+            cli_override=cli_override,
+            overrides_file_value=overrides_file_value,
+            agent_card_value=agent_card_value,
+        )
+
+        if override_model is not None:
+            selected_model = override_model
+            reasoning = preference.reasoning_effort
+            cost = preference.cost_tier
+            rationale = (
+                f"Manual override from {OVERRIDE_PRIORITY_LABELS.get(override_source, override_source)}"
+                f"；原推荐: {preference.primary_model}。{preference.rationale}"
+            )
+            if context == "codex" and not _looks_like_codex_compatible(override_model):
+                warnings.append(
+                    f"Codex 通常只支持 OpenAI 系模型，但 override 指定了 `{override_model}`；请确认或在 Cursor 中执行。",
                 )
+        else:
+            if context == "codex":
+                if preference.codex_model:
+                    selected_model = preference.codex_model
+                else:
+                    selected_model = CODEX_DEVELOPER_MODEL
+                    if preference.primary_model != CODEX_DEVELOPER_MODEL:
+                        warnings.append(
+                            "Codex does not support the primary non-OpenAI model; use gpt-5.5 or run this prompt in Cursor with the recommended model.",
+                        )
+            else:
+                selected_model = preference.primary_model
+            reasoning = preference.reasoning_effort
+            cost = preference.cost_tier
+            rationale = preference.rationale
+
+        if risk in {RiskSeverity.P0_BLOCKER, RiskSeverity.P1_HIGH}:
+            policy_model: str
+            if context == "codex":
+                policy_model = CODEX_DEVELOPER_MODEL
+            else:
+                policy_model = HIGH_REASONING_MODEL
+            needs_escalation = (
+                context == "codex"
+                or reasoning != "high"
+                or _is_low_cost_model(selected_model)
+                or preference.cost_tier == "low"
+                or (override_model is not None and not _looks_like_high_reasoning_model(selected_model))
+            )
+            if needs_escalation:
+                if override_model is not None and selected_model != policy_model:
+                    warnings.append(
+                        f"高风险 (P0/P1) 强制升档到 `{policy_model}`，已覆盖你的 override `{override_model}`。",
+                    )
+                    override_source = "policy"
+                selected_model = policy_model
                 reasoning = "high"
                 cost = "high"
             warnings.append("高风险任务需要高推理模型；Runtime 只推荐，不会自动切换或执行模型。")
             rationale = f"{rationale} 高风险任务需要高推理模型。"
+
         command_hint = self.render_codex_command_for_model(selected_model) if context == "codex" else None
         return ModelSelectionResult(
             role=canonical_role,
@@ -85,6 +146,7 @@ class ModelSelectionService:
             user_action_required=True,
             rationale=rationale,
             warnings=warnings,
+            override_source=override_source,
         )
 
     def recommend_for_task(
@@ -94,11 +156,17 @@ class ModelSelectionService:
         *,
         risk_level: RiskSeverity | str | None = None,
         tool_context: str = "generic",
+        cli_override: str | None = None,
+        overrides_file_value: str | None = None,
+        agent_card_value: str | None = None,
     ) -> ModelSelectionResult:
         return self.recommend_for_role(
             current_agent,
             tool_context=tool_context,
             risk_level=risk_level,
+            cli_override=cli_override,
+            overrides_file_value=overrides_file_value,
+            agent_card_value=agent_card_value,
         )
 
     def render_prompt_section(self, result: ModelSelectionResult) -> str:
@@ -109,6 +177,7 @@ class ModelSelectionService:
             f"- Fallback Models: [{', '.join(result.fallback_models)}]",
             f"- Reasoning Effort: {result.reasoning_effort}",
             f"- Cost Tier: {result.cost_tier}",
+            f"- Override Source: {result.override_source}",
             "- User Action Required: yes",
             "- Runtime Auto Apply: no",
         ]
@@ -153,6 +222,32 @@ Runtime 不自动执行 Cursor Prompt。
 
 def _is_low_cost_model(model: str) -> bool:
     return model in LOW_COST_MODELS
+
+
+def _looks_like_codex_compatible(model: str) -> bool:
+    """Heuristic only — Codex CLI accepts OpenAI-style model slugs."""
+
+    return model.startswith(("gpt-", "o1", "o3", "o4"))
+
+
+def _looks_like_high_reasoning_model(model: str) -> bool:
+    """Heuristic: detect models that already deliver "high" reasoning effort.
+
+    Used to decide whether a manual override is strong enough to skip the
+    P0/P1 escalation policy. Conservative — unknown slugs are treated as
+    NOT high so escalation kicks in.
+    """
+
+    if model in {HIGH_REASONING_MODEL, CODEX_DEVELOPER_MODEL}:
+        return True
+    lower = model.lower()
+    if "thinking-high" in lower or "thinking-xhigh" in lower:
+        return True
+    if lower.startswith("claude-opus") and "thinking" in lower:
+        return True
+    if lower.startswith(("o1", "o3", "o4")):
+        return True
+    return False
 
 
 DEFAULT_MODEL_PREFERENCES: dict[str, AgentModelPreference] = {

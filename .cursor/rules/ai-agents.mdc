@@ -219,3 +219,34 @@ alwaysApply: true
 - `.ai-agents/a2a/blocker.schema.md`
 - `.ai-agents/a2a/message.schema.md`（含 §2.1 blocker vs gate_failure）
 - `.ai-agents/a2a/review.schema.md`
+
+## 16. Agent Model Selection（手动 Override）
+
+每个子 Agent 的模型推荐由 `a2a_runtime` 的 `DEFAULT_MODEL_PREFERENCES` 给出，prompt 顶部 `Recommended Model:` 段落渲染该值。**用户可以通过 markdown 文档手动选择模型，不需要改 Python 代码**。
+
+### 解析优先级（高 → 低）
+
+1. CLI `--model <slug>`（一次性，例 `a2a-agent prompt developer --model claude-4.6-sonnet-medium-thinking`）
+2. `.ai-agents/agent-cards/model-overrides.md` 中 `## <role>` 下勾选的 `- [x] <slug>`（**主要 UX**：md checklist）
+3. `.ai-agents/agent-cards/<role>.card.md` frontmatter 的 `model:` 字段
+4. `a2a_runtime/services/model_selection_service.py` 的 `DEFAULT_MODEL_PREFERENCES` 兜底
+
+### checklist 文件约束（model-overrides.md）
+
+- `## <role>` heading 必须用 6 个 role enum：`pm` / `architect` / `developer` / `qa` / `controller` / `risk`
+- 每个 `## <role>` section 下最多勾一个 `- [x]`；勾多个 → runtime 取第一个并发 warning
+- 不勾任何项 = 该 role 走默认推荐
+- 清单里没有的 slug，可以直接加一行 `- [x] your-custom-slug`，runtime 不校验 slug 真伪
+
+### 高风险（P0/P1）行为
+
+- 高风险任务强制升档到高推理模型（cursor → `claude-opus-4-7-thinking-high`，codex → `gpt-5.5`）
+- 你的 override 会被升档策略覆盖，prompt 顶部 `Recommended Model.Warnings` 会明示"已覆盖"
+- 这条策略不可被 override 关闭
+
+### 不变安全边界
+
+- Runtime 仅生成 prompt 段落，**不会自动切换 Cursor 模型**
+- Runtime **不会自动执行 Codex 命令**
+- 任何模型选择最终都需要用户在 Cursor 模型选择器手动选 / 在终端手动跑 `codex --model <slug>`
+- override 文件本身在 `.ai-agents/agent-cards/` 下，**不属于** Agent 写权限白名单（仅用户可改）

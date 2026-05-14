@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from a2a_runtime.core.constants import SCHEMA_VERSION, Role, role_to_wire
 from a2a_runtime.models._coerce import (
+    as_optional_str,
     as_role,
     as_str,
     as_str_list,
@@ -33,6 +34,7 @@ class AgentCard:
     handoff_contracts: list[str] = field(default_factory=list)
     validation_checklist: list[str] = field(default_factory=list)
     stop_conditions: list[str] = field(default_factory=list)
+    model: str | None = None
     schema_version: str = SCHEMA_VERSION
 
     @classmethod
@@ -62,17 +64,30 @@ class AgentCard:
             handoff_contracts=list(sections.get("handoff_contracts", [])),
             validation_checklist=list(sections.get("validation_checklist", [])),
             stop_conditions=list(sections.get("stop_conditions", [])),
+            model=_parse_optional_model(data.get("model")),
             schema_version=SCHEMA_VERSION,
         )
 
     def to_frontmatter(self) -> dict[str, str]:
-        return {
+        payload: dict[str, str] = {
             "agent_id": self.agent_id,
             "agent_name": self.agent_name,
             "role": role_to_wire(self.role),
             "version": self.version,
             "schema_version": self.schema_version,
         }
+        if self.model:
+            payload["model"] = self.model
+        return payload
+
+
+def _parse_optional_model(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return as_optional_str(value, "model")
+    trimmed = value.strip()
+    return trimmed or None
 
 
 def parse_markdown_sections(body: str) -> dict[str, list[str]]:

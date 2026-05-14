@@ -125,3 +125,39 @@ Cursor 在写 `artifacts/final/final-delivery.md` 前必须确认：
 - 优先复用现有 component / hook / util / type / service
 - 新建文件必须**预先**在 file-change-plan 中（operation: create + allowed: yes）
 - 实施过程中发现需要新建白名单外的文件 → 发 blocker-request
+
+## 14. Agent Model Selection（手动 Override）
+
+每个子 Agent 的模型默认由 `a2a_runtime/services/model_selection_service.py` 的 `DEFAULT_MODEL_PREFERENCES` 推荐，但用户可以通过 markdown 文档手动选择，不需要改 Python 代码。
+
+### 解析优先级（高 → 低）
+
+1. **CLI 一次性**：`a2a-agent prompt <role> --model <slug>`、`a2a-agent model recommend --agent <role> --model <slug>`
+2. **md 文档勾选**：`.ai-agents/agent-cards/model-overrides.md` 中 `## <role>` section 下勾 `- [x] <slug>`
+3. **per-card frontmatter**：`agent-cards/<role>.card.md` 的 `model:` 字段
+4. **Runtime 默认**：`DEFAULT_MODEL_PREFERENCES`
+
+### model-overrides.md 主要 UX
+
+```markdown
+## pm
+
+- [ ] gpt-5.5
+- [x] claude-4.6-sonnet-medium-thinking  -- 我的常用
+- [ ] claude-opus-4-7-thinking-high
+```
+
+- `## <role>` 用 6 个 role enum：`pm` / `architect` / `developer` / `qa` / `controller` / `risk`
+- 每个 section 最多勾 1 个；多勾 → 取第一个并发 warning
+- 不勾 = 走默认；清单外 slug 直接加一行 `- [x] your-slug`，runtime 不校验
+
+### 高风险升档（不可关闭）
+
+- P0/P1 任务强制升档到高推理模型（cursor → `claude-opus-4-7-thinking-high`，codex → `gpt-5.5`）
+- 你的 override 在升档时会被覆盖，`Recommended Model.Warnings` 会明示
+
+### 不变安全边界
+
+- Runtime 仅生成 prompt 段落，**不自动**切换 Cursor 模型 / 执行 Codex
+- 用户始终需要在 Cursor 模型选择器手动选，或手动 `codex --model <slug>`
+- model-overrides.md 在 `.ai-agents/agent-cards/` 下，**仅用户可改**，不在任何 Agent 写权限白名单内

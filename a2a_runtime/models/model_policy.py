@@ -79,6 +79,9 @@ class AgentModelPreference:
         }
 
 
+VALID_OVERRIDE_SOURCES = {"default", "agent_card", "overrides_file", "cli", "policy"}
+
+
 @dataclass(frozen=True)
 class ModelSelectionResult:
     role: Role | str
@@ -92,6 +95,7 @@ class ModelSelectionResult:
     warnings: list[str] = field(default_factory=list)
     may_auto_apply: bool = False
     user_action_required: bool = True
+    override_source: str = "default"
 
     def __post_init__(self) -> None:
         normalize_model_policy_role(self.role)
@@ -104,6 +108,10 @@ class ModelSelectionResult:
             raise SchemaError("reasoning_effort must be low, medium, or high")
         if self.cost_tier not in VALID_COST_TIERS:
             raise SchemaError("cost_tier must be low, medium, or high")
+        if self.override_source not in VALID_OVERRIDE_SOURCES:
+            raise SchemaError(
+                f"override_source must be one of: {', '.join(sorted(VALID_OVERRIDE_SOURCES))}",
+            )
 
     @property
     def role_value(self) -> str:
@@ -122,4 +130,5 @@ class ModelSelectionResult:
             "user_action_required": self.user_action_required,
             "rationale": self.rationale,
             "warnings": list(self.warnings),
+            "override_source": self.override_source,
         }

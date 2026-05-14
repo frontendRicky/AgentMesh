@@ -20,6 +20,7 @@ from a2a_runtime.core.errors import RepositoryError, SchemaError
 from a2a_runtime.core.paths import A2APaths
 from a2a_runtime.models.agent_profile import AgentProfile
 from a2a_runtime.models.file_change_plan import FileChangePlan, FileChangePlanEntry
+from a2a_runtime.repositories.agent_card_repo import AgentCardRepo
 from a2a_runtime.repositories.artifact_repo import ArtifactRepo
 from a2a_runtime.repositories.message_repo import MessageRepo
 from a2a_runtime.repositories.risk_repo import RiskRepo
@@ -59,8 +60,9 @@ class PromptService:
         artifact_repo: ArtifactRepo | None = None,
         message_repo: MessageRepo | None = None,
         risk_repo: RiskRepo | None = None,
-    gate_service: GateService | None = None,
+        gate_service: GateService | None = None,
         model_selection_service: ModelSelectionService | None = None,
+        agent_card_repo: AgentCardRepo | None = None,
     ) -> None:
         self.paths = paths
         self.profile_service = profile_service or AgentProfileService(paths)
@@ -70,6 +72,7 @@ class PromptService:
         self.risk_repo = risk_repo or RiskRepo(self.message_repo)
         self.gate_service = gate_service or GateService()
         self.model_selection_service = model_selection_service or ModelSelectionService()
+        self.agent_card_repo = agent_card_repo or AgentCardRepo(paths)
 
     def generate(
         self,
@@ -80,12 +83,23 @@ class PromptService:
         risk_level: RiskSeverity | str | None = None,
         target_path: str | None = None,
         operation: FileOperation | str | None = None,
+        model_override: str | None = None,
     ) -> str:
         parsed = normalize_role(role, field_name="role")
         if parsed == Role.PM:
-            return self.generate_pm_prompt(task_id, tool_context=tool_context, risk_level=risk_level)
+            return self.generate_pm_prompt(
+                task_id,
+                tool_context=tool_context,
+                risk_level=risk_level,
+                model_override=model_override,
+            )
         if parsed == Role.ARCHITECT:
-            return self.generate_architect_prompt(task_id, tool_context=tool_context, risk_level=risk_level)
+            return self.generate_architect_prompt(
+                task_id,
+                tool_context=tool_context,
+                risk_level=risk_level,
+                model_override=model_override,
+            )
         if parsed == Role.DEVELOPER:
             return self.generate_developer_prompt(
                 task_id,
@@ -93,11 +107,22 @@ class PromptService:
                 operation=operation,
                 tool_context=tool_context,
                 risk_level=risk_level,
+                model_override=model_override,
             )
         if parsed == Role.QA:
-            return self.generate_qa_prompt(task_id, tool_context=tool_context, risk_level=risk_level)
+            return self.generate_qa_prompt(
+                task_id,
+                tool_context=tool_context,
+                risk_level=risk_level,
+                model_override=model_override,
+            )
         if parsed == Role.CONTROLLER:
-            return self.generate_controller_prompt(task_id, tool_context=tool_context, risk_level=risk_level)
+            return self.generate_controller_prompt(
+                task_id,
+                tool_context=tool_context,
+                risk_level=risk_level,
+                model_override=model_override,
+            )
         raise SchemaError("PromptService only generates pm, architect, developer, qa, and controller prompts")
 
     def generate_pm_prompt(
@@ -106,6 +131,7 @@ class PromptService:
         *,
         tool_context: str = "cursor",
         risk_level: RiskSeverity | str | None = None,
+        model_override: str | None = None,
     ) -> str:
         profile = self.profile_service.build_profile(Role.PM, task_id=task_id)
         context = PromptBuildContext(
@@ -124,6 +150,7 @@ class PromptService:
             ],
             tool_context=tool_context,
             risk_level=risk_level,
+            model_override=model_override,
         )
 
     def generate_architect_prompt(
@@ -132,6 +159,7 @@ class PromptService:
         *,
         tool_context: str = "cursor",
         risk_level: RiskSeverity | str | None = None,
+        model_override: str | None = None,
     ) -> str:
         profile = self.profile_service.build_profile(Role.ARCHITECT, task_id=task_id)
         context = PromptBuildContext(
@@ -151,6 +179,7 @@ class PromptService:
             ],
             tool_context=tool_context,
             risk_level=risk_level,
+            model_override=model_override,
         )
 
     def generate_developer_prompt(
@@ -160,6 +189,7 @@ class PromptService:
         operation: FileOperation | str | None = None,
         tool_context: str = "cursor",
         risk_level: RiskSeverity | str | None = None,
+        model_override: str | None = None,
     ) -> str:
         profile = self.profile_service.build_profile(Role.DEVELOPER, task_id=task_id)
         state = self._read_state(task_id)
@@ -217,6 +247,7 @@ class PromptService:
             ],
             tool_context=tool_context,
             risk_level=risk_level,
+            model_override=model_override,
         )
 
     def generate_qa_prompt(
@@ -225,6 +256,7 @@ class PromptService:
         *,
         tool_context: str = "cursor",
         risk_level: RiskSeverity | str | None = None,
+        model_override: str | None = None,
     ) -> str:
         profile = self.profile_service.build_profile(Role.QA, task_id=task_id)
         qa_statuses = " / ".join(status.value for status in QAStatus)
@@ -251,6 +283,7 @@ class PromptService:
             ],
             tool_context=tool_context,
             risk_level=risk_level,
+            model_override=model_override,
         )
 
     def generate_controller_prompt(
@@ -259,6 +292,7 @@ class PromptService:
         *,
         tool_context: str = "cursor",
         risk_level: RiskSeverity | str | None = None,
+        model_override: str | None = None,
     ) -> str:
         profile = self.profile_service.build_profile(Role.CONTROLLER, task_id=task_id)
         state = self._read_state(task_id)
@@ -281,7 +315,35 @@ class PromptService:
             ],
             tool_context=tool_context,
             risk_level=risk_level,
+            model_override=model_override,
         )
+
+    def _resolve_model_override_inputs(self, role: Role) -> tuple[str | None, str | None]:
+        """Look up agent-card frontmatter and overrides-file values for role.
+
+        Returns (overrides_file_value, agent_card_value). Either may be None.
+        Repository / IO failures are swallowed so a broken file never crashes
+        prompt generation; warnings are not propagated here because the
+        ModelSelectionService already surfaces override_source / warnings in
+        the rendered prompt section.
+        """
+
+        overrides_file_value: str | None = None
+        agent_card_value: str | None = None
+        try:
+            overrides, _ = self.agent_card_repo.read_model_overrides()
+            overrides_file_value = overrides.get(role.value)
+        except RepositoryError:
+            overrides_file_value = None
+        except SchemaError:
+            overrides_file_value = None
+        try:
+            card, _ = self.agent_card_repo.try_read_agent_card(role)
+            if card is not None:
+                agent_card_value = card.model
+        except (RepositoryError, SchemaError):
+            agent_card_value = None
+        return overrides_file_value, agent_card_value
 
     def _render_prompt(
         self,
@@ -292,13 +354,18 @@ class PromptService:
         body_sections: list[str],
         tool_context: str = "cursor",
         risk_level: RiskSeverity | str | None = None,
+        model_override: str | None = None,
     ) -> str:
         state = self._read_state(task_id)
         parsed_risk = parse_enum(RiskSeverity, risk_level, "risk_level") if risk_level else None
+        overrides_file_value, agent_card_value = self._resolve_model_override_inputs(role)
         model_result = self.model_selection_service.recommend_for_role(
             role,
             tool_context=tool_context,
             risk_level=parsed_risk,
+            cli_override=model_override,
+            overrides_file_value=overrides_file_value,
+            agent_card_value=agent_card_value,
         )
         model_section = self.model_selection_service.render_prompt_section(model_result)
         header = render_a2a_header(

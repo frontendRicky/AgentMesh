@@ -16,6 +16,7 @@ def run_prompt(
     operation: str | None = None,
     tool_context: str = "cursor",
     risk_level: str | None = None,
+    model_override: str | None = None,
 ) -> CLIResult:
     command = f"prompt {role}"
     try:
@@ -42,13 +43,25 @@ def run_prompt(
             operation=operation,
             tool_context=tool_context,
             risk_level=risk_level,
+            model_override=model_override,
         )
     else:
-        prompt = service.generate(parsed, task_id, tool_context=tool_context, risk_level=risk_level)
+        prompt = service.generate(
+            parsed,
+            task_id,
+            tool_context=tool_context,
+            risk_level=risk_level,
+            model_override=model_override,
+        )
     return CLIResult(
         ok=True,
         command=command,
         task_id=task_id,
-        data={"prompt": prompt, "tool_context": tool_context, "risk_level": risk_level},
+        data={
+            "prompt": prompt,
+            "tool_context": tool_context,
+            "risk_level": risk_level,
+            "model_override": model_override,
+        },
         text=prompt,
     )
