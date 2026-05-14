@@ -250,3 +250,50 @@ alwaysApply: false
 - Runtime **不会自动执行 Codex 命令**
 - 任何模型选择最终都需要用户在 Cursor 模型选择器手动选 / 在终端手动跑 `codex --model <slug>`
 - override 文件本身在 `.ai-agents/agent-cards/` 下，**不属于** Agent 写权限白名单（仅用户可改）
+
+## 17. 召唤 sub-agent 前的模型选择门禁（聊天窗交互）
+
+**适用**：在准备执行 `a2a-agent prompt <role>`（或将以 PM / Architect / Developer / QA / Controller 角色生成产物）之前。
+
+### 步骤
+
+1. **Read** `.ai-agents/agent-cards/model-overrides.md`，扫描该 role 的 `## <role>` section 是否有 `- [x]` 勾选
+2. **有勾选** → 静默使用该 slug，**不打扰用户**，直接 `a2a-agent prompt <role> --model <slug>`（CLI 会从 overrides 文件读取，无需重复传 `--model`）
+3. **没勾选** → **必须** 调用 `AskQuestion` 工具弹出选择题让用户当场选模型，**禁止**默认走 fallback 静默执行
+
+### AskQuestion 选项集（minimal 通用）
+
+每个 role 的弹窗选项**至少**包含以下，把该 role 的默认推荐**置顶**并标注 `（默认推荐）`：
+
+- `claude-4.6-sonnet-medium-thinking` — PM 默认；中等推理 / 中等成本
+- `claude-opus-4-7-thinking-high` — Architect / QA 默认；高推理 / 高成本
+- `gpt-5.5` — Developer 默认 / Codex；高推理 / 高成本
+- `gpt-5.5-mini` — Controller 默认；低推理 / 低成本
+- `用 runtime 默认推荐（不传 --model）` — 等同于该 role 的 primary_model
+- `其他（手动告诉我 slug）` — 选此项时，回复中追问用户具体 slug
+
+### 用户选完后的行为
+
+- 选**具体 slug** → 执行 `a2a-agent prompt <role> --model <selected-slug>`
+- 选**默认** → 执行 `a2a-agent prompt <role>`（不带 `--model`）
+- 选**其他** → 等用户给出 slug 后，执行 `a2a-agent prompt <role> --model <user-given-slug>`
+
+### 主对话模型切换提醒（强制）
+
+生成 prompt 后，**必须**在回复中明确提示：
+
+> ⚠️ 请在 Cursor 模型选择器（右下角）切换为 `<selected-slug>` 后再继续对话；否则你下一轮回复仍会沿用当前主对话模型。
+
+Cursor 不允许 AI 自动切换主对话模型，这是 Cursor 产品级硬限制。本规则无法绕过它。
+
+### 与 model-overrides.md 的关系
+
+- 本门禁是**运行时即时选择**机制，model-overrides.md 是**预先静态配置**机制
+- 两者优先级：当 model-overrides.md 已勾选 → 优先静默使用，**不弹窗**；未勾选 → 弹窗
+- 用户主动说「这次给 X 换个模型」 → **强制弹窗**（即使 model-overrides.md 已勾选），让用户当场选
+
+### 跳过门禁的场景（仅以下情况可不弹）
+
+- 用户在同一轮对话里已经为该 role 选过模型 → 沿用，不重复弹
+- 用户已显式说「全部用默认」/「别再问我」 → 本次会话内静默走默认
+- 上游 task 处于 `blocked` / `final_review_required` 等不需要召唤新 agent 的状态
