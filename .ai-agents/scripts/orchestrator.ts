@@ -17,6 +17,7 @@ import chalk from "chalk";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import type { AgentAlias } from "./agents-model.config.js";
 import { runAgent } from "./run-agent.js";
 
 import { detectPendingClarifications } from "./lib/clarification-detector.js";
@@ -59,6 +60,15 @@ export interface OrchestratorOptions {
   apiKey: string;
   maxLoops?: number;
   defaultReviewer?: string;
+  /** 单次编排的 per-agent 模型覆盖（仅本进程生效，不持久化）。 */
+  modelOverrides?: Partial<Record<AgentAlias, string>>;
+}
+
+function pickOverride(
+  overrides: Partial<Record<AgentAlias, string>> | undefined,
+  alias: AgentAlias,
+): string | undefined {
+  return overrides?.[alias];
 }
 
 const DEFAULT_MAX_LOOPS = 60;
@@ -150,9 +160,19 @@ export async function orchestrate(taskId: string, options: OrchestratorOptions):
       step("重新召唤上一个 Agent 让它读取已答澄清继续工作");
       const lastAgent = inferAgentFromStatus(state.current_status);
       if (lastAgent) {
-        await runAgent(lastAgent, `clarification-questions.md 中的问题已被用户回答，请按 answer 字段继续之前未完成的工作；不要重复已经写过的 artifact 内容。当前 Task: ${taskId}`, { apiKey: options.apiKey });
+        await runAgent(
+          lastAgent,
+          `clarification-questions.md 中的问题已被用户回答，请按 answer 字段继续之前未完成的工作；不要重复已经写过的 artifact 内容。当前 Task: ${taskId}`,
+          {
+            apiKey: options.apiKey,
+            modelOverride: pickOverride(options.modelOverrides, lastAgent),
+          },
+        );
       } else {
-        await invokeControllerAdvance(taskId, state, { apiKey: options.apiKey });
+        await invokeControllerAdvance(taskId, state, {
+          apiKey: options.apiKey,
+          modelOverride: pickOverride(options.modelOverrides, "controller"),
+        });
       }
       continue;
     }
@@ -165,6 +185,7 @@ export async function orchestrate(taskId: string, options: OrchestratorOptions):
         try {
           await runAgent(next.agent, `请按你的 agent.md 工作流执行当前阶段任务。当前 Task: ${taskId}`, {
             apiKey: options.apiKey,
+            modelOverride: pickOverride(options.modelOverrides, next.agent),
           });
           success(`${next.agent} 执行完毕`);
         } catch (err) {
@@ -176,7 +197,10 @@ export async function orchestrate(taskId: string, options: OrchestratorOptions):
 
       case "run_controller_advance":
         try {
-          await invokeControllerAdvance(taskId, state, { apiKey: options.apiKey });
+          await invokeControllerAdvance(taskId, state, {
+            apiKey: options.apiKey,
+            modelOverride: pickOverride(options.modelOverrides, "controller"),
+          });
           success("Controller 推进完毕");
         } catch (err) {
           error(`Controller 执行失败：${(err as Error).message}`);
@@ -255,7 +279,10 @@ async function handleHumanReview(
       default: true,
     });
     if (reuse) {
-      await invokeControllerReviewAdvance(taskId, reviewType, { apiKey: options.apiKey });
+      await invokeControllerReviewAdvance(taskId, reviewType, {
+        apiKey: options.apiKey,
+        modelOverride: pickOverride(options.modelOverrides, "controller"),
+      });
       success("Controller 已处理已有 review record");
       return "continue";
     }
@@ -274,7 +301,10 @@ async function handleHumanReview(
   const filePath = writeReviewRecord({ taskId, reviewType, reviewedArtifacts, input });
   success(`已写 ${path.relative(process.cwd(), filePath)}`);
 
-  await invokeControllerReviewAdvance(taskId, reviewType, { apiKey: options.apiKey });
+  await invokeControllerReviewAdvance(taskId, reviewType, {
+    apiKey: options.apiKey,
+    modelOverride: pickOverride(options.modelOverrides, "controller"),
+  });
   success("Controller 双步推进完毕");
   return "continue";
 }
@@ -298,7 +328,10 @@ async function handleBlocked(
     throw new BlockedAbortError();
   }
 
-  await invokeControllerAdvance(taskId, state, { apiKey: options.apiKey });
+  await invokeControllerAdvance(taskId, state, {
+    apiKey: options.apiKey,
+    modelOverride: pickOverride(options.modelOverrides, "controller"),
+  });
   success("Controller 已尝试恢复");
 }
 

@@ -14,7 +14,10 @@ API Key 从 [cursor.com/dashboard/cloud-agents](https://cursor.com/dashboard/clo
 
 | 变量 | 说明 |
 |---|---|
-| `A2A_MODEL_ID` | 覆盖 SDK 自动选模型；默认通过 `Cursor.models.list()` 找 sonnet 4.6，找不到兜底 `claude-4.6-sonnet` |
+| `A2A_MODEL_ID` | 全局兜底：所有 5 个 Agent 共用同一个模型；默认通过 `Cursor.models.list()` 找 sonnet 4.6，找不到兜底 `claude-4.6-sonnet` |
+| `A2A_MODEL_PM` / `A2A_MODEL_ARCHITECT` / `A2A_MODEL_DEVELOPER` / `A2A_MODEL_QA` / `A2A_MODEL_CONTROLLER` | 单 Agent 模型覆盖，优先级高于 `A2A_MODEL_ID` |
+
+> 完整的模型切换策略与优先级见下方 [按 Agent 切换模型](#按-agent-切换模型)。
 
 ## 三种使用方式
 
@@ -127,6 +130,81 @@ API Key 从 [cursor.com/dashboard/cloud-agents](https://cursor.com/dashboard/clo
 ✓ Controller 双步推进完毕
 ```
 
+## 按 Agent 切换模型
+
+5 个子 Agent（PM / Architect / Developer / QA / Controller）默认共用同一个 Sonnet 模型，
+也可以为每个 Agent 单独配置不同模型。优先级（高 → 低）：
+
+1. **CLI 一次性参数**（仅本次进程，不持久化）
+   ```bash
+   ./pm --model gpt-5.5-high "..."
+   ./architect --model claude-opus-4-7-thinking-xhigh "..."
+   ./start-task \
+     --type feature --priority P2 --owner zhangxia \
+     --model-pm gpt-5.5-high \
+     --model-architect claude-opus-4-7-thinking-xhigh \
+     --model-developer claude-4.6-sonnet-medium-thinking \
+     --model-qa composer-2-fast \
+     --model-controller claude-4.6-sonnet \
+     "需求：..."
+   ./resume-task --model-developer claude-opus-4-7-thinking-xhigh
+   ```
+
+2. **单 Agent 环境变量**（当前 shell 会话）
+   ```bash
+   export A2A_MODEL_PM=gpt-5.5-high
+   export A2A_MODEL_ARCHITECT=claude-opus-4-7-thinking-xhigh
+   export A2A_MODEL_DEVELOPER=claude-4.6-sonnet-medium-thinking
+   export A2A_MODEL_QA=composer-2-fast
+   export A2A_MODEL_CONTROLLER=claude-4.6-sonnet
+   ```
+
+3. **团队共享配置**（git 跟踪，永久生效）
+
+   编辑 `.ai-agents/scripts/agents-model.config.ts`，把对应行的 `null` 改成 model id：
+   ```ts
+   export const AGENT_MODEL_CONFIG: Record<AgentAlias, string | null> = {
+     pm: "gpt-5.5-high",
+     architect: "claude-opus-4-7-thinking-xhigh",
+     developer: "claude-4.6-sonnet-medium-thinking",
+     qa: "composer-2-fast",
+     controller: "claude-4.6-sonnet",
+   };
+   ```
+
+4. **全局兜底环境变量**（向后兼容，所有 Agent 共用）
+   ```bash
+   export A2A_MODEL_ID=claude-4.6-sonnet
+   ```
+
+5. **都不配** → SDK 自动解析（偏好 sonnet 4.6 → 兜底 `claude-4.6-sonnet`）
+
+### 查看与管理
+
+```bash
+./model show       # 显示当前每个 Agent 生效的 model id 与来源
+./model list       # 列出 Cursor SDK 当前可用的所有 model id
+./model help       # 查看详细帮助
+```
+
+`./model show` 输出示例：
+
+```
+alias       agent                       model id                              source
+─────────────────────────────────────────────────────────────────────────────────────
+pm          Product Manager             gpt-5.5-high                          环境变量 A2A_MODEL_PM
+architect   Architect                   claude-opus-4-7-thinking-xhigh        agents-model.config.ts
+developer   Senior Frontend Developer   claude-4.6-sonnet-medium-thinking     agents-model.config.ts
+qa          QA Tester                   claude-4.6-sonnet                     SDK 自动解析
+controller  Flow Controller             claude-4.6-sonnet                     SDK 自动解析
+```
+
+每次 Agent 启动时也会在日志里打印实际使用的模型与来源：
+
+```
+[run-agent] Senior Frontend Developer Agent | model=claude-opus-4-7-thinking-xhigh (config_file) | prompt=12345 chars
+```
+
 ## 暂停与恢复
 
 任何时候按 `Ctrl+C` 中断后：
@@ -144,11 +222,13 @@ API Key 从 [cursor.com/dashboard/cloud-agents](https://cursor.com/dashboard/clo
 
 ```
 .ai-agents/scripts/
-├── start-task.ts           # 一键启动
-├── resume-task.ts          # 从 state 继续
-├── orchestrator.ts         # 主编排循环
-├── run-agent.ts            # 单 Agent 执行器
-├── start-task / resume-task / pm / architect / developer / qa / controller   # bash 快捷脚本
+├── start-task.ts             # 一键启动
+├── resume-task.ts            # 从 state 继续
+├── orchestrator.ts           # 主编排循环
+├── run-agent.ts              # 单 Agent 执行器
+├── model.ts                  # ./model show / list / help
+├── agents-model.config.ts    # 团队共享：5 个 Agent 各自 model id
+├── start-task / resume-task / pm / architect / developer / qa / controller / model   # bash 快捷脚本
 ├── lib/
 │   ├── paths.ts                  # 工作区路径常量
 │   ├── state-reader.ts           # 解析 state.md
@@ -157,7 +237,7 @@ API Key 从 [cursor.com/dashboard/cloud-agents](https://cursor.com/dashboard/clo
 │   ├── review-prompter.ts        # 终端 verdict 交互
 │   ├── review-writer.ts          # 写 architect-review.md / final-review.md
 │   ├── controller-invoker.ts     # 调 Controller 推进
-│   ├── model-config.ts           # 模型 id 自动解析
+│   ├── model-config.ts           # per-agent 模型解析（三层优先级）
 │   └── terminal-ui.ts            # 彩色输出
 └── package.json
 ```

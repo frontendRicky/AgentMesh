@@ -1,6 +1,12 @@
 import { runAgent } from "../run-agent.js";
 import type { TaskState } from "./state-reader.js";
 
+export interface ControllerInvokeOptions {
+  apiKey?: string;
+  /** 单次调用的模型覆盖（专用于 controller agent）。 */
+  modelOverride?: string;
+}
+
 /**
  * 调用 Flow Controller Agent 执行一次"推进"。
  *
@@ -12,7 +18,7 @@ import type { TaskState } from "./state-reader.js";
 export async function invokeControllerAdvance(
   taskId: string,
   state: TaskState,
-  options: { apiKey?: string } = {},
+  options: ControllerInvokeOptions = {},
 ): Promise<void> {
   const prompt = [
     `当前 Task: ${taskId}`,
@@ -39,7 +45,7 @@ export async function invokeControllerAdvance(
 export async function invokeControllerReviewAdvance(
   taskId: string,
   reviewType: "architect_review" | "final_review",
-  options: { apiKey?: string } = {},
+  options: ControllerInvokeOptions = {},
 ): Promise<void> {
   const reviewFile =
     reviewType === "architect_review" ? "human-reviews/architect-review.md" : "human-reviews/final-review.md";
@@ -83,8 +89,9 @@ export async function invokeControllerCreateTask(params: {
   humanOwner: string;
   rawRequirement: string;
   apiKey?: string;
+  modelOverride?: string;
 }): Promise<void> {
-  const { taskType, taskTitle, priority, humanOwner, rawRequirement, apiKey } = params;
+  const { taskType, taskTitle, priority, humanOwner, rawRequirement, apiKey, modelOverride } = params;
 
   const prompt = [
     `请按 .ai-agents/agents/flow-controller.agent.md 场景 A 执行：创建新 Task`,
@@ -110,5 +117,5 @@ export async function invokeControllerCreateTask(params: {
     `7. 在对话中明确报告：新建的 task_id`,
   ].join("\n");
 
-  await runAgent("controller", prompt, { apiKey });
+  await runAgent("controller", prompt, { apiKey, modelOverride });
 }

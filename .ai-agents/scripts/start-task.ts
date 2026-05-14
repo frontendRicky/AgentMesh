@@ -15,6 +15,7 @@
 
 import { input, select } from "@inquirer/prompts";
 
+import { AGENT_ALIASES, type AgentAlias } from "./agents-model.config.js";
 import { invokeControllerCreateTask } from "./lib/controller-invoker.js";
 import { readActiveTaskId } from "./lib/state-reader.js";
 import { banner, info, error, success } from "./lib/terminal-ui.js";
@@ -33,7 +34,8 @@ async function main() {
   const inlinePriority = pickArg(args, "--priority");
   const inlineOwner = pickArg(args, "--owner");
   const inlineTitle = pickArg(args, "--title");
-  const positional = args.filter((a) => !a.startsWith("--")).join(" ");
+  const modelOverrides = pickModelOverrides(args);
+  const positional = stripFlagsAndValues(args).join(" ");
 
   banner("A2A — Start New Task");
 
@@ -91,6 +93,7 @@ async function main() {
     humanOwner,
     rawRequirement,
     apiKey,
+    modelOverride: modelOverrides.controller,
   });
 
   const newTaskId = readActiveTaskId();
@@ -102,13 +105,56 @@ async function main() {
   success(`新 Task 已创建：${newTaskId}`);
   banner(`开始编排：${newTaskId}`);
 
-  await orchestrate(newTaskId, { apiKey, defaultReviewer: humanOwner });
+  await orchestrate(newTaskId, {
+    apiKey,
+    defaultReviewer: humanOwner,
+    modelOverrides,
+  });
 }
 
 function pickArg(args: string[], flag: string): string | undefined {
   const idx = args.indexOf(flag);
   if (idx === -1 || idx === args.length - 1) return undefined;
   return args[idx + 1];
+}
+
+const KNOWN_VALUE_FLAGS = new Set<string>([
+  "--type",
+  "--priority",
+  "--owner",
+  "--title",
+  ...AGENT_ALIASES.map((a) => `--model-${a}`),
+]);
+
+/**
+ * 从 argv 中剥离所有"带值 flag + 它们的值"以及 boolean flag，
+ * 剩下的纯位置参数即原始需求文本。
+ */
+function stripFlagsAndValues(args: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (a.includes("=") && a.startsWith("--")) continue;
+    if (KNOWN_VALUE_FLAGS.has(a)) {
+      i += 1;
+      continue;
+    }
+    if (a.startsWith("--")) continue;
+    out.push(a);
+  }
+  return out;
+}
+
+function pickModelOverrides(args: string[]): Partial<Record<AgentAlias, string>> {
+  const out: Partial<Record<AgentAlias, string>> = {};
+  for (const alias of AGENT_ALIASES) {
+    const flag = `--model-${alias}`;
+    const fromSpace = pickArg(args, flag);
+    const eqMatch = args.find((a) => a.startsWith(`${flag}=`));
+    const value = fromSpace ?? (eqMatch ? eqMatch.slice(flag.length + 1) : undefined);
+    if (value && value.trim()) out[alias] = value.trim();
+  }
+  return out;
 }
 
 main().catch((err) => {

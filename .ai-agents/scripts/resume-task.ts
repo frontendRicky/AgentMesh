@@ -10,6 +10,7 @@
 
 import * as fs from "node:fs";
 
+import { AGENT_ALIASES, type AgentAlias } from "./agents-model.config.js";
 import { stateFile } from "./lib/paths.js";
 import { readActiveTaskId, readState } from "./lib/state-reader.js";
 import { banner, error, info, printState } from "./lib/terminal-ui.js";
@@ -24,6 +25,7 @@ async function main() {
 
   const args = process.argv.slice(2);
   const owner = pickArg(args, "--owner") ?? "zhangxia";
+  const modelOverrides = pickModelOverrides(args);
   const explicit = args.find((a) => /^T-\d{4}-\d{3}$/.test(a));
 
   let taskId: string | null = explicit ?? readActiveTaskId();
@@ -50,13 +52,29 @@ async function main() {
   info(`从当前 state 继续编排：`);
   printState(state);
 
-  await orchestrate(taskId, { apiKey, defaultReviewer: owner });
+  await orchestrate(taskId, {
+    apiKey,
+    defaultReviewer: owner,
+    modelOverrides,
+  });
 }
 
 function pickArg(args: string[], flag: string): string | undefined {
   const idx = args.indexOf(flag);
   if (idx === -1 || idx === args.length - 1) return undefined;
   return args[idx + 1];
+}
+
+function pickModelOverrides(args: string[]): Partial<Record<AgentAlias, string>> {
+  const out: Partial<Record<AgentAlias, string>> = {};
+  for (const alias of AGENT_ALIASES) {
+    const flag = `--model-${alias}`;
+    const fromSpace = pickArg(args, flag);
+    const eqMatch = args.find((a) => a.startsWith(`${flag}=`));
+    const value = fromSpace ?? (eqMatch ? eqMatch.slice(flag.length + 1) : undefined);
+    if (value && value.trim()) out[alias] = value.trim();
+  }
+  return out;
 }
 
 main().catch((err) => {

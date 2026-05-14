@@ -13,7 +13,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { resolveModelId } from "./lib/model-config.js";
+import { isAgentAlias, type AgentAlias } from "./agents-model.config.js";
+import { resolveModelIdForAgent } from "./lib/model-config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -116,32 +117,67 @@ function buildPrompt(agentAlias: string, agentDef: string, userPrompt: string): 
   ].join("\n");
 }
 
+export interface RunAgentOptions {
+  projectRoot?: string;
+  apiKey?: string;
+  verbose?: boolean;
+  /** 单次调用的模型覆盖（CLI --model）；优先级最高。 */
+  modelOverride?: string;
+}
+
 export async function runAgent(
   agentAlias: string,
   userPrompt: string,
-  options: { projectRoot?: string; apiKey?: string; verbose?: boolean } = {},
+  options: RunAgentOptions = {},
 ): Promise<{ status: string; result?: string }> {
   const apiKey = options.apiKey ?? process.env.CURSOR_API_KEY;
   if (!apiKey) {
     throw new Error("CURSOR_API_KEY 未设置");
   }
 
+  if (!isAgentAlias(agentAlias)) {
+    const valid = Object.keys(AGENT_MAP).join(" | ");
+    throw new Error(`Unknown agent "${agentAlias}". Valid: ${valid}`);
+  }
+  const alias: AgentAlias = agentAlias;
+
   const projectRoot = options.projectRoot ?? path.resolve(__dirname, "../..");
-  const agentDef = loadAgentDef(agentAlias);
-  const fullPrompt = buildPrompt(agentAlias, agentDef, userPrompt);
-  const modelId = await resolveModelId(apiKey);
+  const agentDef = loadAgentDef(alias);
+  const fullPrompt = buildPrompt(alias, agentDef, userPrompt);
+  const resolved = await resolveModelIdForAgent(alias, apiKey, options.modelOverride);
 
   if (options.verbose !== false) {
-    console.log(`[run-agent] ${AGENT_DISPLAY[agentAlias]} | model=${modelId} | prompt=${fullPrompt.length} chars`);
+    console.log(
+      `[run-agent] ${AGENT_DISPLAY[alias]} | model=${resolved.modelId} (${resolved.source}) | prompt=${fullPrompt.length} chars`,
+    );
   }
 
   const result = await Agent.prompt(fullPrompt, {
     apiKey,
-    model: { id: modelId },
+    model: { id: resolved.modelId },
     local: { cwd: projectRoot },
   });
 
   return { status: result.status, result: result.result };
+}
+
+function extractModelFlag(args: string[]): { modelOverride?: string; rest: string[] } {
+  const out: string[] = [];
+  let modelOverride: string | undefined;
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (a === "--model" && i + 1 < args.length) {
+      modelOverride = args[i + 1];
+      i += 1;
+      continue;
+    }
+    if (a.startsWith("--model=")) {
+      modelOverride = a.slice("--model=".length);
+      continue;
+    }
+    out.push(a);
+  }
+  return { modelOverride, rest: out };
 }
 
 async function main() {
@@ -152,7 +188,7 @@ async function main() {
 A2A Agent Runner
 
 Usage:
-  CURSOR_API_KEY=cursor_xxx tsx run-agent.ts <agent> "<prompt>"
+  CURSOR_API_KEY=cursor_xxx tsx run-agent.ts <agent> [--model <id>] "<prompt>"
 
 Agents:
   pm          产品经理 — 需求分析 / PRD / 任务分解
@@ -160,18 +196,22 @@ Agents:
   developer   开发     — 代码实现（双门禁：developer_processing + approved）
   qa          测试     — 测试报告 / 验收清单
   controller  调度器   — Task 创建 / 状态推进 / Blocker 管理
+
+Options:
+  --model <id>     本次调用强制使用的模型 id（优先级最高，覆盖配置文件 / 环境变量）
     `);
     process.exit(0);
   }
 
-  const userPrompt = rest.join(" ");
+  const { modelOverride, rest: promptArgs } = extractModelFlag(rest);
+  const userPrompt = promptArgs.join(" ");
   if (!userPrompt) {
     console.error('Error: prompt is required. Example: tsx run-agent.ts pm "你的需求"');
     process.exit(1);
   }
 
   try {
-    const result = await runAgent(agentAlias, userPrompt);
+    const result = await runAgent(agentAlias, userPrompt, { modelOverride });
     console.log(`\n[run-agent] status=${result.status}`);
     if (result.result) {
       console.log("\n--- Agent Output ---\n" + result.result + "\n--- End ---");

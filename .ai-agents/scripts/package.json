@@ -11,7 +11,8 @@
     "architect": "tsx run-agent.ts architect",
     "developer": "tsx run-agent.ts developer",
     "qa": "tsx run-agent.ts qa",
-    "controller": "tsx run-agent.ts controller"
+    "controller": "tsx run-agent.ts controller",
+    "model": "tsx model.ts"
   },
   "dependencies": {
     "@cursor/sdk": "latest",
