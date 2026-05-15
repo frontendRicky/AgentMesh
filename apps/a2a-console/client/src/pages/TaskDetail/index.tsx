@@ -1,0 +1,112 @@
+import { Link, useParams } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Empty } from '@/components/ui/empty';
+import { Skeleton } from '@/components/ui/skeleton';
+import { StatusBadge } from '@/components/StatusBadge';
+import { MiniTimeline } from '@/components/TimelineNode';
+import { useTaskDetail } from '@/hooks/useTaskDetail';
+import { useBlockers } from '@/hooks/useBlockers';
+import { agentMetaOf } from '@/constants/agent-meta';
+import type { CurrentStatus } from '@/types/state';
+
+import Chat from './Chat';
+import Overview from './Overview';
+import Timeline from './Timeline';
+import Artifacts from './Artifacts';
+import Risk from './Risk';
+import Metrics from './Metrics';
+import ModelPromptTab from './ModelPromptTab';
+
+export default function TaskDetail() {
+  const { taskId } = useParams<{ taskId: string }>();
+  const { data, error, loading } = useTaskDetail(taskId ?? null);
+  const { data: blockers } = useBlockers(taskId ?? null);
+
+  if (!taskId) {
+    return <div className="p-6">缺少 taskId 参数</div>;
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-3 p-6">
+        <Skeleton className="h-8 w-72" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="p-6">
+        <Empty
+          title={`加载失败 (${error.code})`}
+          description={error.message}
+          action={
+            <Button asChild size="sm" variant="outline">
+              <Link to="/tasks">返回列表</Link>
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  const status = data.state.current_status as CurrentStatus;
+  const isBlocked = (blockers?.items?.length ?? 0) > 0;
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden">
+      <header className="border-b border-border bg-background px-5 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Button asChild variant="ghost" size="icon" className="h-7 w-7">
+                <Link to="/tasks"><ArrowLeft className="h-4 w-4" /></Link>
+              </Button>
+              <h2 className="truncate text-base font-semibold">
+                {data.task.task_title} <span className="ml-1 font-mono text-[11px] text-muted-foreground">{taskId}</span>
+              </h2>
+              <StatusBadge status={status} />
+            </div>
+            <p className="mt-0.5 pl-9 text-[11px] text-muted-foreground">
+              当前 {agentMetaOf(data.state.current_agent).name} · 下一棒 {agentMetaOf(data.state.next_agent).name} · 更新于 {data.state.updated_at}
+            </p>
+          </div>
+        </div>
+        <div className="mt-3">
+          <MiniTimeline current={status} isBlocked={isBlocked} />
+        </div>
+      </header>
+
+      <Tabs defaultValue="chat" className="flex flex-1 flex-col overflow-hidden">
+        <div className="border-b border-border bg-background px-5">
+          <TabsList className="bg-transparent p-0 h-auto gap-3 mt-0">
+            <TabsTrigger value="chat" className="data-[state=active]:bg-muted">💬 群聊</TabsTrigger>
+            <TabsTrigger value="overview" className="data-[state=active]:bg-muted">概览</TabsTrigger>
+            <TabsTrigger value="timeline" className="data-[state=active]:bg-muted">时间线</TabsTrigger>
+            <TabsTrigger value="artifacts" className="data-[state=active]:bg-muted">Artifacts</TabsTrigger>
+            <TabsTrigger value="risk" className="data-[state=active]:bg-muted">
+              风险/Blocker
+              {isBlocked ? <span className="ml-1 rounded bg-red-500 px-1 text-[10px] text-white">{blockers?.items.length}</span> : null}
+            </TabsTrigger>
+            <TabsTrigger value="metrics" className="data-[state=active]:bg-muted">指标</TabsTrigger>
+            <TabsTrigger value="model" className="data-[state=active]:bg-muted">Model & Prompt</TabsTrigger>
+          </TabsList>
+        </div>
+
+        <div className="flex-1 overflow-hidden">
+          <TabsContent value="chat" className="h-full mt-0"><Chat taskId={taskId} status={status} /></TabsContent>
+          <TabsContent value="overview" className="h-full mt-0 overflow-y-auto scrollbar-thin"><Overview detail={data} /></TabsContent>
+          <TabsContent value="timeline" className="h-full mt-0 overflow-y-auto scrollbar-thin"><Timeline taskId={taskId} /></TabsContent>
+          <TabsContent value="artifacts" className="h-full mt-0"><Artifacts taskId={taskId} /></TabsContent>
+          <TabsContent value="risk" className="h-full mt-0 overflow-y-auto scrollbar-thin"><Risk taskId={taskId} /></TabsContent>
+          <TabsContent value="metrics" className="h-full mt-0 overflow-y-auto scrollbar-thin"><Metrics taskId={taskId} /></TabsContent>
+          <TabsContent value="model" className="h-full mt-0 overflow-y-auto scrollbar-thin"><ModelPromptTab taskId={taskId} status={status} /></TabsContent>
+        </div>
+      </Tabs>
+    </div>
+  );
+}

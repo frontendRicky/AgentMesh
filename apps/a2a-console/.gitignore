@@ -1,0 +1,8 @@
+node_modules
+dist
+build
+.cache
+.vite
+.DS_Store
+*.log
+.a2a-console-config.json
