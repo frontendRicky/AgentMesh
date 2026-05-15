@@ -12,7 +12,9 @@ import { humanReviewsRouter } from './routes/human-reviews.js';
 import { metricsRouter } from './routes/metrics.js';
 import { promptKeywordsRouter } from './routes/prompt-keywords.js';
 import { modelPresetsRouter } from './routes/model-presets.js';
+import { projectGeneratorRouter } from './routes/project-generator.js';
 import { configRouter } from './routes/config.js';
+import { fail } from './routes/_helpers.js';
 
 export function createApp(): express.Express {
   const app = express();
@@ -33,16 +35,17 @@ export function createApp(): express.Express {
   app.use('/api/a2a/tasks', metricsRouter);
   app.use('/api/a2a/tasks', promptKeywordsRouter);
   app.use('/api/a2a/model-presets', modelPresetsRouter);
+  app.use('/api/a2a/project-generator', projectGeneratorRouter);
   app.use('/api/a2a/config', configRouter);
 
   app.use((_req, res) => {
-    res.status(404).json({ ok: false, error: { code: 'NOT_FOUND', message: 'Route not found' } });
+    fail(res, 404, 'NOT_FOUND', 'Route not found');
   });
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const message = err instanceof Error ? err.message : String(err);
     logger.error('unhandled error', { message });
-    res.status(500).json({ ok: false, error: { code: 'INTERNAL_ERROR', message } });
+    fail(res, 500, 'INTERNAL_ERROR', message);
   });
 
   return app;

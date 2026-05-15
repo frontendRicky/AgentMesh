@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@a2a-console/contract": "0.1.0",
     "cors": "2.8.5",
     "express": "4.21.2",
     "gray-matter": "4.0.3",

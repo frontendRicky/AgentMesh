@@ -1,8 +1,16 @@
 node_modules
 dist
+!packages/contract/dist
+!packages/contract/dist/**
 build
 .cache
 .vite
 .DS_Store
 *.log
 .a2a-console-config.json
+
+# tsc 误产物：client 源码目录是纯 TS，不允许 emit .js / .d.ts 进 src/
+client/src/**/*.js
+client/src/**/*.d.ts
+client/vite.config.js
+client/vite.config.d.ts

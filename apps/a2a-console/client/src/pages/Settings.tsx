@@ -16,6 +16,8 @@ export default function Settings() {
   const [submitting, setSubmitting] = useState(false);
   const pollIntervalMs = useSettingsStore((s) => s.pollIntervalMs);
   const setPollInterval = useSettingsStore((s) => s.setPollInterval);
+  const expertMode = useSettingsStore((s) => s.expertMode);
+  const setExpertMode = useSettingsStore((s) => s.setExpertMode);
 
   useEffect(() => {
     if (data?.project_root) setPath(data.project_root);
@@ -45,7 +47,7 @@ export default function Settings() {
         <CardHeader>
           <CardTitle>A2A 项目根目录</CardTitle>
           <CardDescription>
-            指向包含 <code>.ai-agents/workspace/</code> 的目录。本 Console 仅读取该路径下的 Markdown 文件，不会写入。
+            指向包含 <code>.ai-agents/workspace/</code> 的目录。普通模式只会在这里创建新的任务包。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -76,6 +78,20 @@ export default function Settings() {
 
       <Card>
         <CardHeader>
+          <CardTitle>显示模式</CardTitle>
+          <CardDescription>
+            普通模式给非技术同事使用；专家模式保留原有 A2A 工作台。
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant={expertMode ? 'outline' : 'secondary'} onClick={() => setExpertMode(!expertMode)}>
+            {expertMode ? '切到普通模式' : '切到专家模式'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>轮询间隔</CardTitle>
           <CardDescription>每隔 N ms 重新拉取数据。最小 1000。</CardDescription>
         </CardHeader>
@@ -97,8 +113,8 @@ export default function Settings() {
           <CardTitle>关于</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-xs text-muted-foreground">
-          <p>A2A Console MVP · Vite + React + Express 只读 server</p>
-          <p>不写 .ai-agents/**，不调起 Agent，不调用模型。</p>
+          <p>A2A Console MVP · Vite + React + Express</p>
+          <p>普通模式只写新的任务包，不启动执行流程，不调用模型。</p>
           <p>本地开发：client 5173 / server 5174。</p>
         </CardContent>
       </Card>

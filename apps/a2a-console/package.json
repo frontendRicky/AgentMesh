@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "Local visual dashboard for the markdown file-based A2A runtime",
   "workspaces": [
+    "packages/contract",
     "client",
     "server"
   ],
