@@ -137,7 +137,17 @@ Cursor 在写 `artifacts/final/final-delivery.md` 前必须确认：
 3. **per-card frontmatter**：`agent-cards/<role>.card.md` 的 `model:` 字段
 4. **Runtime 默认**：`DEFAULT_MODEL_PREFERENCES`
 
-### model-overrides.md 主要 UX
+### 模型配置三级优先级
+
+召唤 sub-agent 前按以下顺序检查，有值则静默使用，不弹窗：
+
+| 优先级 | 来源 | 设置方式 |
+|---|---|---|
+| 1 | `model-overrides.md` `- [x]` | 勾选 CLI 跑流程时用的模型 |
+| 2 | `.cursor/agents/<role>.md` `model:` | Cursor Agent 面板里设置的模型 |
+| 3 | 两处均无配置 | 弹 AskQuestion 让用户当场选 |
+
+### model-overrides.md 用法
 
 ```markdown
 ## pm
@@ -149,7 +159,19 @@ Cursor 在写 `artifacts/final/final-delivery.md` 前必须确认：
 
 - `## <role>` 用 6 个 role enum：`pm` / `architect` / `developer` / `qa` / `controller` / `risk`
 - 每个 section 最多勾 1 个；多勾 → 取第一个并发 warning
-- 不勾 = 走默认；清单外 slug 直接加一行 `- [x] your-slug`，runtime 不校验
+- 不勾 = 走下一级检查；清单外 slug 直接加一行 `- [x] your-slug`，runtime 不校验
+
+### .cursor/agents/<role>.md 用法
+
+```yaml
+---
+name: pm
+model: gpt-5.5   # ← 在这里设置，A2A 触发时同样静默跳过弹窗
+description: ...
+---
+```
+
+两处都设置时，`model-overrides.md` 优先级更高。
 
 ### 高风险升档（不可关闭）
 

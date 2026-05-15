@@ -258,8 +258,10 @@ alwaysApply: false
 ### 步骤
 
 1. **Read** `.ai-agents/agent-cards/model-overrides.md`，扫描该 role 的 `## <role>` section 是否有 `- [x]` 勾选
-2. **有勾选** → 静默使用该 slug，**不打扰用户**，直接 `a2a-agent prompt <role> --model <slug>`（CLI 会从 overrides 文件读取，无需重复传 `--model`）
-3. **没勾选** → **必须** 调用 `AskQuestion` 工具弹出选择题让用户当场选模型，**禁止**默认走 fallback 静默执行
+2. **有勾选** → 静默使用该 slug，**不打扰用户**，直接 `a2a-agent prompt <role> --model <slug>`，**结束**
+3. **没勾选** → **Read** `.cursor/agents/<role>.md`，读取 frontmatter 的 `model:` 字段（非空且非注释）
+4. **`model:` 字段有值** → 静默使用该 slug，**不打扰用户**，直接 `a2a-agent prompt <role> --model <slug>`，**结束**
+5. **两处均无配置** → **必须** 调用 `AskQuestion` 工具弹出选择题让用户当场选模型，**禁止**默认走 fallback 静默执行
 
 ### AskQuestion 选项集（minimal 通用）
 
@@ -286,14 +288,20 @@ alwaysApply: false
 
 Cursor 不允许 AI 自动切换主对话模型，这是 Cursor 产品级硬限制。本规则无法绕过它。
 
-### 与 model-overrides.md 的关系
+### 三处配置来源优先级（高 → 低）
 
-- 本门禁是**运行时即时选择**机制，model-overrides.md 是**预先静态配置**机制
-- 两者优先级：当 model-overrides.md 已勾选 → 优先静默使用，**不弹窗**；未勾选 → 弹窗
-- 用户主动说「这次给 X 换个模型」 → **强制弹窗**（即使 model-overrides.md 已勾选），让用户当场选
+| 优先级 | 来源 | 行为 |
+|---|---|---|
+| 1 | `model-overrides.md` 的 `- [x] <slug>` | 静默使用，不弹窗 |
+| 2 | `.cursor/agents/<role>.md` frontmatter 的 `model:` | 静默使用，不弹窗 |
+| 3 | 两处均无配置 | 弹 AskQuestion 让用户选 |
+
+- 用户主动说「这次给 X 换个模型」 → **强制弹窗**（即使已有配置），让用户当场选
 
 ### 跳过门禁的场景（仅以下情况可不弹）
 
+- `model-overrides.md` 该 role section 下有 `- [x]` 勾选
+- `.cursor/agents/<role>.md` frontmatter `model:` 字段非空
 - 用户在同一轮对话里已经为该 role 选过模型 → 沿用，不重复弹
 - 用户已显式说「全部用默认」/「别再问我」 → 本次会话内静默走默认
 - 上游 task 处于 `blocked` / `final_review_required` 等不需要召唤新 agent 的状态
