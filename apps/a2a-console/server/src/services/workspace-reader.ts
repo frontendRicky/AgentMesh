@@ -5,6 +5,12 @@ import { resolveSafePath } from '../lib/path-guard.js';
 import { readMarkdownWithLimit, type ReadResult } from '../lib/file-size-guard.js';
 import { parseMarkdown, type ParsedMarkdown } from './frontmatter.js';
 import { emptyAgentBucket, estimateTokens, type AgentTokenBucket } from './token-estimate.js';
+import type {
+  LargestArtifact,
+  MessageItem as ContractMessageItem,
+  MetricsResponse as ContractMetricsResponse,
+  ReviewItem as ContractReviewItem,
+} from '@a2a-console/contract';
 
 const TASK_ID_RE = /^T-\d{4}-\d{3}$/;
 
@@ -75,17 +81,7 @@ export interface ArtifactFile extends ReadResult {
   parsed: ParsedMarkdown;
 }
 
-export interface MessageItem {
-  message_id: string | null;
-  from_agent: string | null;
-  to_agent: string | null;
-  message_type: string | null;
-  intent: string | null;
-  summary: string | null;
-  referenced_artifacts: string[];
-  created_at: string | null;
-  file_path: string;
-}
+export type MessageItem = ContractMessageItem;
 
 export interface BlockerItem {
   blocker_id: string | null;
@@ -105,32 +101,8 @@ export interface BlockersResponse {
   items: BlockerItem[];
 }
 
-export interface ReviewItem {
-  review_id: string | null;
-  review_type: string | null;
-  reviewer: string | null;
-  reviewed_at: string | null;
-  verdict: string | null;
-  followup_required: boolean | null;
-  notes: string | null;
-  file_path: string;
-}
-
-export interface MetricsResponse {
-  tokens: {
-    total_estimate: number;
-    by_agent: AgentTokenBucket;
-    by_stage: Record<string, number>;
-  };
-  context: {
-    active_chars: number;
-    active_tokens_estimate: number;
-    model: string | null;
-    model_max_context: number;
-    usage_pct: number;
-    level: 'safe' | 'warning' | 'high' | 'danger';
-  };
-}
+export type ReviewItem = ContractReviewItem;
+export type MetricsResponse = ContractMetricsResponse;
 
 export class WorkspaceReader {
   constructor(private readonly projectRoot: string) {}
@@ -409,6 +381,26 @@ export class WorkspaceReader {
     return chars;
   }
 
+  private collectTokenFiles(taskRoot: string, absDir: string, relDir = ''): LargestArtifact[] {
+    const files: LargestArtifact[] = [];
+    for (const e of fs.readdirSync(absDir, { withFileTypes: true })) {
+      const childAbs = path.join(absDir, e.name);
+      const childRel = relDir ? path.posix.join(relDir, e.name) : e.name;
+      if (e.isDirectory()) {
+        files.push(...this.collectTokenFiles(taskRoot, childAbs, childRel));
+      } else if (e.isFile()) {
+        const guardedAbs = resolveSafePath(taskRoot, childRel);
+        const stat = fs.statSync(guardedAbs);
+        files.push({
+          path: childRel,
+          size_bytes: stat.size,
+          tokens_estimate: estimateTokens(stat.size),
+        });
+      }
+    }
+    return files;
+  }
+
   computeMetrics(taskId: string, model: string | null, modelMaxContext: number): MetricsResponse {
     const root = this.taskDir(taskId);
     if (!fs.existsSync(root)) throw new Error('TASK_NOT_FOUND');
@@ -448,6 +440,10 @@ export class WorkspaceReader {
     else if (usagePct > 0.75) level = 'high';
     else if (usagePct > 0.5) level = 'warning';
 
+    const largestArtifacts = this.collectTokenFiles(root, root)
+      .sort((a, b) => b.size_bytes - a.size_bytes || a.path.localeCompare(b.path))
+      .slice(0, 10);
+
     return {
       tokens: { total_estimate: totalTokens, by_agent: byAgent, by_stage: byStage },
       context: {
@@ -458,6 +454,7 @@ export class WorkspaceReader {
         usage_pct: Number(usagePct.toFixed(4)),
         level,
       },
+      largest_artifacts: largestArtifacts,
     };
   }
 }

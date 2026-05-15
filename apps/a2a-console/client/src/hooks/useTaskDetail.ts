@@ -1,21 +1,10 @@
 import { useMemo } from 'react';
+import { taskDetailResponseSchema, type TaskDetailResponse } from '@a2a-console/contract';
 
 import { apiGet, usePolling } from './useApi';
 import { useSettingsStore } from '@/store/settingsStore';
 import type { StateFrontmatter } from '@/types/state';
 import type { TaskFrontmatter } from '@/types/task';
-
-interface ParsedMarkdown {
-  frontmatter: Record<string, unknown> | null;
-  body: string;
-  parse_error: string | null;
-}
-
-interface TaskDetailRaw {
-  task: ParsedMarkdown;
-  state: ParsedMarkdown;
-  summary: unknown;
-}
 
 export interface TaskDetailData {
   task: TaskFrontmatter & Record<string, unknown>;
@@ -26,7 +15,7 @@ export interface TaskDetailData {
   state_parse_error: string | null;
 }
 
-function flatten(raw: TaskDetailRaw): TaskDetailData {
+function flatten(raw: TaskDetailResponse): TaskDetailData {
   return {
     task: (raw.task.frontmatter ?? {}) as TaskDetailData['task'],
     state: (raw.state.frontmatter ?? {}) as TaskDetailData['state'],
@@ -39,8 +28,8 @@ function flatten(raw: TaskDetailRaw): TaskDetailData {
 
 export function useTaskDetail(taskId: string | null) {
   const interval = useSettingsStore((s) => s.pollIntervalMs);
-  const result = usePolling<TaskDetailRaw>(
-    () => apiGet<TaskDetailRaw>(`/api/a2a/tasks/${taskId}`),
+  const result = usePolling<TaskDetailResponse>(
+    () => apiGet(`/api/a2a/tasks/${taskId}`, taskDetailResponseSchema),
     [taskId ?? ''],
     { intervalMs: interval, enabled: Boolean(taskId) },
   );

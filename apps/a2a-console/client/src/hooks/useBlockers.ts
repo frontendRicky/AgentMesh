@@ -1,6 +1,8 @@
+import { reviewsResponseSchema, type ReviewsResponse } from '@a2a-console/contract';
+
 import { apiGet, usePolling } from './useApi';
 import { useSettingsStore } from '@/store/settingsStore';
-import type { BlockersResponse, ReviewItem } from '@/types/blocker';
+import type { BlockersResponse } from '@/types/blocker';
 
 export function useBlockers(taskId: string | null) {
   const interval = useSettingsStore((s) => s.pollIntervalMs);
@@ -13,8 +15,8 @@ export function useBlockers(taskId: string | null) {
 
 export function useReviews(taskId: string | null) {
   const interval = useSettingsStore((s) => s.pollIntervalMs);
-  return usePolling<{ items: ReviewItem[] }>(
-    () => apiGet(`/api/a2a/tasks/${taskId}/human-reviews`),
+  return usePolling<ReviewsResponse>(
+    () => apiGet(`/api/a2a/tasks/${taskId}/reviews`, reviewsResponseSchema),
     [taskId ?? ''],
     { intervalMs: interval, enabled: Boolean(taskId) },
   );

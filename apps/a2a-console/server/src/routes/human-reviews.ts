@@ -1,17 +1,22 @@
 import { Router } from 'express';
+import type { Request, Response } from 'express';
+import { reviewsResponseSchema } from '@a2a-console/contract';
 
-import { ok, resolveProjectRoot, validateTaskIdParam, handleReaderError } from './_helpers.js';
+import { okWithSchema, resolveProjectRoot, validateTaskIdParam, handleReaderError } from './_helpers.js';
 
 export const humanReviewsRouter = Router();
 
-humanReviewsRouter.get('/:taskId/human-reviews', (req, res) => {
+function getReviews(req: Request, res: Response) {
   const ctx = resolveProjectRoot(req, res);
   if (!ctx) return;
   const taskId = validateTaskIdParam(req, res);
   if (!taskId) return;
   try {
-    ok(res, { items: ctx.reader.listHumanReviews(taskId) });
+    okWithSchema(res, reviewsResponseSchema, { items: ctx.reader.listHumanReviews(taskId) });
   } catch (e) {
     handleReaderError(res, e);
   }
-});
+}
+
+humanReviewsRouter.get('/:taskId/reviews', getReviews);
+humanReviewsRouter.get('/:taskId/human-reviews', getReviews);

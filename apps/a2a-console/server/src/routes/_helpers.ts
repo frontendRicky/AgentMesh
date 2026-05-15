@@ -1,4 +1,6 @@
 import type { Request, Response } from 'express';
+import { apiFailureEnvelopeSchema, apiSuccessEnvelopeSchema } from '@a2a-console/contract';
+import type { z } from 'zod';
 
 import { loadConfig } from '../config/config-store.js';
 import { validateProjectRoot } from '../lib/path-guard.js';
@@ -15,6 +17,20 @@ export function ok<T>(res: Response, data: T): Response {
   return res.json({ ok: true, data });
 }
 
+export function okWithSchema<T extends z.ZodTypeAny>(
+  res: Response,
+  dataSchema: T,
+  data: z.infer<T>,
+): Response {
+  const parsed = apiSuccessEnvelopeSchema(dataSchema).safeParse({ ok: true, data });
+  if (!parsed.success) {
+    return fail(res, 500, 'VALIDATION_ERROR', 'Response failed contract validation', {
+      issues: parsed.error.issues,
+    });
+  }
+  return res.json(parsed.data);
+}
+
 export function fail(
   res: Response,
   status: number,
@@ -22,7 +38,15 @@ export function fail(
   message: string,
   details?: unknown,
 ): Response {
-  return res.status(status).json({ ok: false, error: { code, message, details } });
+  const payload = { ok: false as const, error: { code, message, details } };
+  const parsed = apiFailureEnvelopeSchema.safeParse(payload);
+  if (!parsed.success) {
+    return res.status(500).json({
+      ok: false,
+      error: { code: 'VALIDATION_ERROR', message: 'Error envelope failed contract validation' },
+    });
+  }
+  return res.status(status).json(parsed.data);
 }
 
 export function resolveProjectRoot(_req: Request, res: Response): ResolvedContext | null {

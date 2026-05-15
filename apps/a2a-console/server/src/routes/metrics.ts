@@ -1,6 +1,7 @@
 import { Router } from 'express';
+import { metricsResponseSchema } from '@a2a-console/contract';
 
-import { ok, resolveProjectRoot, validateTaskIdParam, handleReaderError } from './_helpers.js';
+import { okWithSchema, resolveProjectRoot, validateTaskIdParam, handleReaderError } from './_helpers.js';
 import { readModelPresets } from '../services/model-presets-reader.js';
 
 const MODEL_CONTEXT: Record<string, number> = {
@@ -32,7 +33,7 @@ metricsRouter.get('/:taskId/metrics', (req, res) => {
       role && role in presets.defaults ? presets.defaults[role] : null;
     const model = requestedModel ?? overrideForRole ?? defaultForRole ?? 'gpt-5.5';
     const maxCtx = MODEL_CONTEXT[model] ?? DEFAULT_CTX;
-    ok(res, ctx.reader.computeMetrics(taskId, model, maxCtx));
+    okWithSchema(res, metricsResponseSchema, ctx.reader.computeMetrics(taskId, model, maxCtx));
   } catch (e) {
     handleReaderError(res, e);
   }

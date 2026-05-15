@@ -1,3 +1,5 @@
+import type { ReviewItem as ContractReviewItem } from '@a2a-console/contract';
+
 export interface BlockerItem {
   blocker_id: string | null;
   blocking_reason: string | null;
@@ -16,13 +18,6 @@ export interface BlockersResponse {
   items: BlockerItem[];
 }
 
-export interface ReviewItem {
-  review_id: string | null;
-  review_type: string | null;
-  reviewer: string | null;
-  reviewed_at: string | null;
+export type ReviewItem = ContractReviewItem & {
   verdict: 'approved' | 'rejected' | 'needs_changes' | string | null;
-  followup_required: boolean | null;
-  notes: string | null;
-  file_path: string;
-}
+};

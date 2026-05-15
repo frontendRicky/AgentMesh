@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-
-export interface ApiEnvelope<T> {
-  ok: boolean;
-  data?: T;
-  error?: { code: string; message: string; field?: string };
-}
+import { apiEnvelopeSchema, unknownDataSchema, type ApiEnvelope } from '@a2a-console/contract';
+import type { z } from 'zod';
 
 export interface ApiError {
   code: string;
@@ -12,40 +8,76 @@ export interface ApiError {
   status?: number;
 }
 
-export async function apiGet<T>(url: string): Promise<T> {
+export async function apiGet<T>(url: string, dataSchema?: z.ZodType<T>): Promise<T> {
   const res = await fetch(url);
-  let body: ApiEnvelope<T>;
+  let raw: unknown;
   try {
-    body = (await res.json()) as ApiEnvelope<T>;
+    raw = await res.json();
   } catch {
     throw { code: 'PARSE_ERROR', message: `非 JSON 响应 (${res.status})`, status: res.status } as ApiError;
   }
-  if (!body.ok || body.data === undefined) {
+  const bodyResult = apiEnvelopeSchema(dataSchema ?? unknownDataSchema).safeParse(raw);
+  if (!bodyResult.success) {
+    throw {
+      code: 'VALIDATION_ERROR',
+      message: '响应契约校验失败',
+      status: res.status,
+    } as ApiError;
+  }
+  const body = bodyResult.data as ApiEnvelope<T>;
+  if (!body.ok) {
     throw {
       code: body.error?.code ?? 'UNKNOWN',
       message: body.error?.message ?? `请求失败 (${res.status})`,
       status: res.status,
     } as ApiError;
   }
+  if (body.data === undefined) {
+    throw {
+      code: 'VALIDATION_ERROR',
+      message: `响应缺少 data (${res.status})`,
+      status: res.status,
+    } as ApiError;
+  }
   return body.data;
 }
 
-export async function apiPost<T, B = unknown>(url: string, payload: B): Promise<T> {
+export async function apiPost<T, B = unknown>(
+  url: string,
+  payload: B,
+  dataSchema?: z.ZodType<T>,
+): Promise<T> {
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  let body: ApiEnvelope<T>;
+  let raw: unknown;
   try {
-    body = (await res.json()) as ApiEnvelope<T>;
+    raw = await res.json();
   } catch {
     throw { code: 'PARSE_ERROR', message: `非 JSON 响应 (${res.status})`, status: res.status } as ApiError;
   }
-  if (!body.ok || body.data === undefined) {
+  const bodyResult = apiEnvelopeSchema(dataSchema ?? unknownDataSchema).safeParse(raw);
+  if (!bodyResult.success) {
+    throw {
+      code: 'VALIDATION_ERROR',
+      message: '响应契约校验失败',
+      status: res.status,
+    } as ApiError;
+  }
+  const body = bodyResult.data as ApiEnvelope<T>;
+  if (!body.ok) {
     throw {
       code: body.error?.code ?? 'UNKNOWN',
       message: body.error?.message ?? `请求失败 (${res.status})`,
+      status: res.status,
+    } as ApiError;
+  }
+  if (body.data === undefined) {
+    throw {
+      code: 'VALIDATION_ERROR',
+      message: `响应缺少 data (${res.status})`,
       status: res.status,
     } as ApiError;
   }

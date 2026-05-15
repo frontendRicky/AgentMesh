@@ -1,3 +1,5 @@
+import type { MessageItem as ContractMessageItem } from '@a2a-console/contract';
+
 export type MessageType =
   | 'request'
   | 'response'
@@ -8,14 +10,6 @@ export type MessageType =
   | 'status'
   | 'final';
 
-export interface MessageItem {
-  message_id: string | null;
-  from_agent: string | null;
-  to_agent: string | null;
+export type MessageItem = ContractMessageItem & {
   message_type: MessageType | string | null;
-  intent: string | null;
-  summary: string | null;
-  referenced_artifacts: string[];
-  created_at: string | null;
-  file_path: string;
-}
+};

@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Empty } from '@/components/ui/empty';
 import { ContextUsageBar } from '@/components/ContextUsageBar';
 import { useMetrics } from '@/hooks/useMetrics';
-import { formatNumber } from '@/lib/format';
+import { formatNumber, formatSize } from '@/lib/format';
 
 export default function Metrics({ taskId }: { taskId: string }) {
   const { data, loading, error } = useMetrics(taskId);
@@ -56,6 +56,37 @@ export default function Metrics({ taskId }: { taskId: string }) {
             tokens={data.context.active_tokens_estimate}
             model={data.context.model}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Largest artifacts</CardTitle>
+          <CardDescription>按文件字节数降序，路径相对 task 根目录</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {data.largest_artifacts.length === 0 ? (
+            <Empty title="暂无文件" description="当前 task 目录还没有可统计文件" />
+          ) : (
+            <div className="divide-y rounded border">
+              {data.largest_artifacts.map((item) => (
+                <div
+                  key={item.path}
+                  className="grid grid-cols-[minmax(0,1fr)_110px_110px] items-center gap-3 px-3 py-2 text-sm"
+                >
+                  <span className="truncate font-mono text-xs text-foreground" title={item.path}>
+                    {item.path}
+                  </span>
+                  <span className="text-right tabular-nums text-muted-foreground">
+                    {formatSize(item.size_bytes)}
+                  </span>
+                  <span className="text-right tabular-nums text-muted-foreground">
+                    {formatNumber(item.tokens_estimate)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -1,7 +1,10 @@
 import { useMemo } from 'react';
+import { modelPresetsResponseSchema, type ModelPresetsResponse } from '@a2a-console/contract';
 
 import { apiGet, usePolling } from './useApi';
 import { useSettingsStore } from '@/store/settingsStore';
+
+const AGENT_ORDER = ['pm', 'architect', 'developer', 'qa', 'controller', 'risk'] as const;
 
 export interface ModelPresetEntry {
   agent: string;
@@ -9,14 +12,7 @@ export interface ModelPresetEntry {
   source: 'override' | 'default';
 }
 
-interface RawModelPresets {
-  overrides: Record<string, string | null>;
-  defaults: Record<string, string | null>;
-}
-
-const AGENT_ORDER = ['pm', 'architect', 'developer', 'qa', 'controller', 'risk'];
-
-function flatten(raw: RawModelPresets): { entries: ModelPresetEntry[] } {
+function flatten(raw: ModelPresetsResponse): { entries: ModelPresetEntry[] } {
   const entries: ModelPresetEntry[] = [];
   for (const agent of AGENT_ORDER) {
     const override = raw.overrides[agent] ?? null;
@@ -32,8 +28,8 @@ function flatten(raw: RawModelPresets): { entries: ModelPresetEntry[] } {
 
 export function useModelPresets(_taskId: string | null) {
   const interval = useSettingsStore((s) => s.pollIntervalMs);
-  const result = usePolling<RawModelPresets>(
-    () => apiGet('/api/a2a/model-presets'),
+  const result = usePolling<ModelPresetsResponse>(
+    () => apiGet('/api/a2a/model-presets', modelPresetsResponseSchema),
     [],
     { intervalMs: Math.max(interval, 10_000) },
   );
