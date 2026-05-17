@@ -1,16 +1,21 @@
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Empty } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/StatusBadge';
 import { MiniTimeline } from '@/components/TimelineNode';
+import { apiGet, apiPost } from '@/hooks/useApi';
 import { useTaskDetail } from '@/hooks/useTaskDetail';
 import { useBlockers } from '@/hooks/useBlockers';
 import { useSettingsStore } from '@/store/settingsStore';
 import { agentMetaOf } from '@/constants/agent-meta';
+import { cn } from '@/lib/cn';
+import type { ArtifactFile } from '@/types/artifact';
 import type { CurrentStatus } from '@/types/state';
 
 import Chat from './Chat';
@@ -27,6 +32,7 @@ export default function TaskDetail() {
   const { data, error, loading } = useTaskDetail(taskId ?? null);
   const { data: blockers } = useBlockers(taskId ?? null);
   const expertMode = useSettingsStore((s) => s.expertMode);
+  const policyDecision = usePolicyDecision(taskId ?? null, expertMode);
 
   if (!taskId) {
     return <div className="p-6">缺少 taskId 参数</div>;
@@ -82,6 +88,7 @@ export default function TaskDetail() {
               当前 {agentMetaOf(data.state.current_agent).name} · 下一棒 {agentMetaOf(data.state.next_agent).name} · 更新于 {data.state.updated_at}
             </p>
           </div>
+          {policyDecision ? <PolicySuggestionCard decision={policyDecision} /> : null}
         </div>
         <div className="mt-3">
           <MiniTimeline current={status} isBlocked={isBlocked} />
@@ -116,4 +123,110 @@ export default function TaskDetail() {
       </Tabs>
     </div>
   );
+}
+
+interface PolicyDecision {
+  decision: 'AUTO_APPROVE' | 'AUTO_REJECT' | 'NEED_HUMAN_REVIEW' | 'NEED_MORE_TESTS' | 'NEED_FIX_LOOP';
+  risk_level: 'low' | 'medium' | 'high' | 'critical';
+  reasons: string[];
+  matched_rules: string[];
+  evaluated_paths: Array<{ path: string; risk: string }>;
+  budget_status: 'ok' | 'warning' | 'breached';
+  created_at: string;
+}
+
+function usePolicyDecision(taskId: string | null, enabled: boolean): PolicyDecision | null {
+  const [decision, setDecision] = useState<PolicyDecision | null>(null);
+
+  useEffect(() => {
+    if (!taskId || !enabled) {
+      setDecision(null);
+      return;
+    }
+
+    let cancelled = false;
+    const artifactPath = 'artifacts/architect/file-change-plan.md';
+    apiGet<ArtifactFile>(
+      `/api/a2a/tasks/${taskId}/artifacts?path=${encodeURIComponent(artifactPath)}`,
+    )
+      .then((artifact) => apiPost<unknown>('/api/a2a/policy/evaluate', {
+        task_id: taskId,
+        file_change_plan_text: artifact.body,
+      }))
+      .then((raw) => {
+        if (cancelled) return;
+        setDecision(isPolicyDecision(raw) ? raw : null);
+      })
+      .catch(() => {
+        if (!cancelled) setDecision(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [taskId, enabled]);
+
+  return decision;
+}
+
+function PolicySuggestionCard({ decision }: { decision: PolicyDecision }) {
+  return (
+    <div className="hidden w-[320px] shrink-0 rounded-md border border-border bg-muted/30 p-3 lg:block">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium">Policy 建议</p>
+        <Badge variant="outline" className={cn('font-mono', riskBadgeClass(decision.risk_level))}>
+          {decision.decision}
+        </Badge>
+      </div>
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        risk: {decision.risk_level} · budget: {decision.budget_status}
+      </p>
+      <ul className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+        {decision.reasons.slice(0, 3).map((reason) => (
+          <li key={reason} className="line-clamp-2">{reason}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function riskBadgeClass(risk: PolicyDecision['risk_level']): string {
+  if (risk === 'critical') return 'border-red-300 bg-red-50 text-red-700';
+  if (risk === 'high') return 'border-amber-300 bg-amber-50 text-amber-700';
+  if (risk === 'medium') return 'border-sky-300 bg-sky-50 text-sky-700';
+  return 'border-emerald-300 bg-emerald-50 text-emerald-700';
+}
+
+function isPolicyDecision(value: unknown): value is PolicyDecision {
+  if (value === null || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return (
+    isDecision(record['decision'])
+    && isRiskLevel(record['risk_level'])
+    && Array.isArray(record['reasons'])
+    && record['reasons'].every((reason) => typeof reason === 'string')
+    && Array.isArray(record['matched_rules'])
+    && record['matched_rules'].every((rule) => typeof rule === 'string')
+    && Array.isArray(record['evaluated_paths'])
+    && isBudgetStatus(record['budget_status'])
+    && typeof record['created_at'] === 'string'
+  );
+}
+
+function isDecision(value: unknown): value is PolicyDecision['decision'] {
+  return (
+    value === 'AUTO_APPROVE'
+    || value === 'AUTO_REJECT'
+    || value === 'NEED_HUMAN_REVIEW'
+    || value === 'NEED_MORE_TESTS'
+    || value === 'NEED_FIX_LOOP'
+  );
+}
+
+function isRiskLevel(value: unknown): value is PolicyDecision['risk_level'] {
+  return value === 'low' || value === 'medium' || value === 'high' || value === 'critical';
+}
+
+function isBudgetStatus(value: unknown): value is PolicyDecision['budget_status'] {
+  return value === 'ok' || value === 'warning' || value === 'breached';
 }
