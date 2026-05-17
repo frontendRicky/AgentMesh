@@ -8,6 +8,7 @@ import { locksRouter } from './routes/locks.js';
 import { projectsRouter } from './routes/projects.js';
 import { queueRouter } from './routes/queue.js';
 import { runsRouter } from './routes/runs.js';
+import { usageRouter } from './routes/usage.js';
 
 const PORT = Number(process.env.A2A_CONSOLE_PORT ?? 5174);
 
@@ -20,6 +21,7 @@ app.use('/api/a2a/locks', locksRouter);
 app.use('/api/a2a/projects', projectsRouter);
 app.use('/api/a2a/queue', queueRouter);
 app.use('/api/a2a/runs', runsRouter);
+app.use('/api/a2a/usage', usageRouter);
 app.use(createApp());
 
 app.listen(PORT, () => {

@@ -32,6 +32,14 @@ interface Project {
   updated_at: string;
 }
 
+interface UsageSummary {
+  total_cost_usd: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  record_count: number;
+  breached_count: number;
+}
+
 const projectTypeOptions: Array<{ value: ProjectType; label: string }> = [
   { value: 'self_upgrade', label: '自升级' },
   { value: 'client_project', label: '客户项目' },
@@ -41,9 +49,11 @@ const projectTypeOptions: Array<{ value: ProjectType; label: string }> = [
 
 export default function Projects() {
   const [items, setItems] = useState<Project[]>([]);
+  const [usageSummaries, setUsageSummaries] = useState<Record<string, UsageSummary | null>>({});
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const today = getLocalDate();
   const [form, setForm] = useState({
     project_name: '',
     project_root: '',
@@ -64,6 +74,21 @@ export default function Projects() {
   useEffect(() => {
     void refresh();
   }, []);
+
+  useEffect(() => {
+    if (items.length === 0) {
+      setUsageSummaries({});
+      return;
+    }
+
+    let cancelled = false;
+    void fetchUsageSummaries(items, today).then((next) => {
+      if (!cancelled) setUsageSummaries(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [items, today]);
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -126,6 +151,7 @@ export default function Projects() {
                     <th className="py-2">项目名称</th>
                     <th>类型</th>
                     <th>自动化模式</th>
+                    <th>今日成本</th>
                     <th>项目根目录</th>
                     <th>操作</th>
                   </tr>
@@ -136,6 +162,9 @@ export default function Projects() {
                       <td className="py-2.5 font-medium">{project.project_name}</td>
                       <td className="text-xs">{projectTypeLabel(project.project_type)}</td>
                       <td className="font-mono text-xs">{project.automation_mode}</td>
+                      <td className="font-mono text-xs">
+                        {formatUsageCost(usageSummaries[project.project_id])}
+                      </td>
                       <td className="max-w-[420px] truncate font-mono text-xs" title={project.project_root}>
                         {project.project_root}
                       </td>
@@ -222,6 +251,30 @@ async function fetchProjects(): Promise<Project[]> {
   return raw.filter(isProject);
 }
 
+async function fetchUsageSummaries(
+  projects: Project[],
+  date: string,
+): Promise<Record<string, UsageSummary | null>> {
+  const entries = await Promise.all(
+    projects.map(async (project) => {
+      try {
+        const summary = await fetchUsageSummary(project.project_id, date);
+        return [project.project_id, summary] as const;
+      } catch {
+        return [project.project_id, null] as const;
+      }
+    }),
+  );
+  return Object.fromEntries(entries);
+}
+
+async function fetchUsageSummary(projectId: string, date: string): Promise<UsageSummary> {
+  const params = new URLSearchParams({ project_id: projectId, date });
+  const raw = await apiGet<unknown>(`/api/a2a/usage/summary?${params.toString()}`);
+  if (isUsageSummary(raw)) return raw;
+  throw { code: 'VALIDATION_ERROR', message: '响应契约校验失败' } as ApiError;
+}
+
 async function deleteProject(projectId: string): Promise<void> {
   const res = await fetch(`/api/a2a/projects/${encodeURIComponent(projectId)}`, {
     method: 'DELETE',
@@ -241,6 +294,19 @@ function projectTypeLabel(type: ProjectType): string {
   if (type === 'client_project') return '客户项目';
   if (type === 'generated_project') return '生成项目';
   return '维护项目';
+}
+
+function formatUsageCost(summary: UsageSummary | null | undefined): string {
+  if (!summary) return '-';
+  return `$${summary.total_cost_usd.toFixed(2)}`;
+}
+
+function getLocalDate(): string {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function formatApiError(error: unknown): string {
@@ -283,6 +349,18 @@ function isProject(value: unknown): value is Project {
     && Array.isArray(record['blocked_paths'])
     && typeof record['created_at'] === 'string'
     && typeof record['updated_at'] === 'string'
+  );
+}
+
+function isUsageSummary(value: unknown): value is UsageSummary {
+  if (value === null || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record['total_cost_usd'] === 'number'
+    && typeof record['total_input_tokens'] === 'number'
+    && typeof record['total_output_tokens'] === 'number'
+    && typeof record['record_count'] === 'number'
+    && typeof record['breached_count'] === 'number'
   );
 }
 

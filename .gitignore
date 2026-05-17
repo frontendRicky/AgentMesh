@@ -32,6 +32,8 @@ node_modules/
 # ─── A2A console runtime state ───────────────────────────────────────────────
 # Project Registry persistence file is local runtime state, not source.
 apps/a2a-console/server/.projects-registry.json
+# Token Ledger JSONL is local runtime usage data, not source.
+apps/a2a-console/server/.token-ledger.jsonl
 
 # ─── A2A workspace task files ────────────────────────────────────────────────
 # Workspace task dirs (T-YYYY-NNN) are project-specific and should NOT be
