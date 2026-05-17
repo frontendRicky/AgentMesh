@@ -19,6 +19,7 @@
 | GET | `/api/a2a/tasks` | 全 task 列表，支持 `?status&agent&priority&q` |
 | GET | `/api/a2a/tasks/:taskId` | 单 task 完整 |
 | GET | `/api/a2a/tasks/:taskId/state` | 仅 state.md（轮询用） |
+| GET | `/api/a2a/tasks/:taskId/download` | 下载任务包 .zip（STORE 方式，50 MB 上限） |
 | GET | `/api/a2a/tasks/:taskId/artifacts` | 文件树（不带 path）或单文件（带 `?path=`） |
 | GET | `/api/a2a/tasks/:taskId/messages` | messages 列表 |
 | GET | `/api/a2a/tasks/:taskId/blockers` | blockers + active_blocker / blocked_context |
@@ -30,6 +31,7 @@
 | GET | `/api/a2a/project-generator/templates` | 普通模式项目类型模板 |
 | POST | `/api/a2a/project-generator/drafts` | 根据中文需求整理预览，不写文件 |
 | POST | `/api/a2a/project-generator/drafts/:draftId/tasks` | 创建新的 `.ai-agents/workspace/T-YYYY-NNN/` 任务包 |
+| GET | `/api/a2a/config/project-root` | 读取 project_root（无鉴权，只读） |
 | POST | `/api/a2a/config/project-root` | 写 server config，body: `{project_root}` |
 
 ## Project Generator
@@ -153,6 +155,7 @@ curl -s "http://localhost:5174/api/a2a/tasks/T-2026-003/human-reviews"
 curl -s "http://localhost:5174/api/a2a/tasks/T-2026-003/metrics" | jq '.data.largest_artifacts'
 curl -s "http://localhost:5174/api/a2a/tasks/T-2026-003/reviews"
 curl -s "http://localhost:5174/api/a2a/tasks/T-2026-003/human-reviews"
+curl -OJ "http://localhost:5174/api/a2a/tasks/T-2026-003/download"
 ```
 
 ## 不存在的接口（MVP 显式不实现）

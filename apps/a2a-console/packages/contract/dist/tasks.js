@@ -25,4 +25,10 @@ export const taskDetailResponseSchema = z.object({
     state: parsedMarkdownSchema,
     summary: taskSummarySchema.nullable(),
 });
+export const taskDownloadErrorCodeSchema = z.enum([
+    'TASK_NOT_FOUND',
+    'TASK_PACKAGE_TOO_LARGE',
+    'PATH_TRAVERSAL',
+    'PROJECT_ROOT_MISSING',
+]);
 //# sourceMappingURL=tasks.js.map

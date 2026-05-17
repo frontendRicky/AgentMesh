@@ -53,9 +53,11 @@ apps/a2a-console/
 
 ## 已落地（ST-01 ~ ST-08）
 
-**Server（11 GET + 1 POST）**
+**Server（12 GET + 1 POST）**
 - `/api/a2a/health`、`/api/a2a/config/project-root`（GET/POST）、`/api/a2a/active-task`
 - `/api/a2a/tasks`、`/tasks/:taskId`、`/tasks/:taskId/state`
+- `GET /api/a2a/tasks/:taskId/download` — 下载任务包（ZIP STORE，50MB 上限）
+- `GET /api/a2a/config/project-root` — 读取当前 project_root 配置
 - `/tasks/:taskId/artifacts`（树）、`/tasks/:taskId/artifacts/file?path=...`（单文件，含 truncated 标记）
 - `/tasks/:taskId/messages`、`/tasks/:taskId/blockers`、`/tasks/:taskId/reviews`
 - `/tasks/:taskId/human-reviews`（deprecated，兼容旧 client）
@@ -103,6 +105,7 @@ apps/a2a-console/
 curl -s "http://localhost:5174/api/a2a/tasks/T-2026-003/metrics" | jq '.data.largest_artifacts'
 curl -s "http://localhost:5174/api/a2a/tasks/T-2026-003/reviews"
 curl -s "http://localhost:5174/api/a2a/tasks/T-2026-003/human-reviews"
+curl -OJ "http://localhost:5174/api/a2a/tasks/T-2026-003/download"
 ```
 
 ## 参考文档

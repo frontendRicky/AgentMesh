@@ -20,7 +20,7 @@ export default function App() {
           <Route path="generator" element={<Generator />} />
           <Route path="dashboard" element={<ExpertOnly><Dashboard /></ExpertOnly>} />
           <Route path="tasks" element={<Tasks />} />
-          <Route path="tasks/:taskId" element={<ExpertOnly><TaskDetail /></ExpertOnly>} />
+          <Route path="tasks/:taskId" element={<TaskDetail />} />
           <Route path="settings" element={<Settings />} />
           <Route path="blockers" element={<ExpertOnly><Blockers /></ExpertOnly>} />
           <Route path="model-prompt" element={<ExpertOnly><ModelPrompt /></ExpertOnly>} />

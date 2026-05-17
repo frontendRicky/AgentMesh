@@ -35,6 +35,16 @@ export default function Tasks() {
             <Empty
               title={expertMode ? '还没有 task' : '还没有任务'}
               description={expertMode ? '跑 `a2a-agent task new <slug>` 创建一个。' : '先去“生成项目”创建一个任务包。'}
+              action={
+                expertMode ? null : (
+                  <Link
+                    to="/generator"
+                    className="text-xs font-medium text-sky-700 hover:underline"
+                  >
+                    去生成第一个任务包
+                  </Link>
+                )
+              }
             />
           ) : (
             <div className="overflow-x-auto">
@@ -48,6 +58,7 @@ export default function Tasks() {
                     {expertMode ? <th className="text-right">Tokens</th> : null}
                     {expertMode ? <th className="text-right">Artifacts</th> : null}
                     <th>更新时间</th>
+                    {!expertMode ? <th>操作</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -68,7 +79,12 @@ export default function Tasks() {
                             {t.task_id}
                           </Link>
                         ) : (
-                          <span className="font-mono text-xs text-foreground">{t.task_id}</span>
+                          <Link
+                            to={`/tasks/${t.task_id}`}
+                            className="font-mono text-xs text-sky-700 hover:underline"
+                          >
+                            {t.task_id}
+                          </Link>
                         )}
                         {t.task_id === activeId ? (
                           <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-[10px] text-amber-800">
@@ -94,6 +110,22 @@ export default function Tasks() {
                         </td>
                       ) : null}
                       <td className="text-xs text-muted-foreground">{formatTime(t.updated_at)}</td>
+                      {!expertMode ? (
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <Link to={`/tasks/${t.task_id}`} className="text-xs text-sky-700 hover:underline">
+                              查看
+                            </Link>
+                            <a
+                              href={`/api/a2a/tasks/${t.task_id}/download`}
+                              download={`${t.task_id}.zip`}
+                              className="text-xs text-sky-700 hover:underline"
+                            >
+                              下载
+                            </a>
+                          </div>
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>

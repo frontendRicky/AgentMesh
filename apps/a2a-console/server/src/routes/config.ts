@@ -33,3 +33,8 @@ configRouter.post('/project-root', (req, res) => {
     return fail(res, 400, code, e instanceof Error ? e.message : String(e));
   }
 });
+
+configRouter.get('/project-root', (_req, res) => {
+  const config = loadConfig();
+  ok(res, { project_root: config.project_root });
+});

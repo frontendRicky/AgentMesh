@@ -33,3 +33,11 @@ export const taskDetailResponseSchema = z.object({
 export type ParsedMarkdownPayload = z.infer<typeof parsedMarkdownSchema>;
 export type TaskSummary = z.infer<typeof taskSummarySchema>;
 export type TaskDetailResponse = z.infer<typeof taskDetailResponseSchema>;
+
+export const taskDownloadErrorCodeSchema = z.enum([
+  'TASK_NOT_FOUND',
+  'TASK_PACKAGE_TOO_LARGE',
+  'PATH_TRAVERSAL',
+  'PROJECT_ROOT_MISSING',
+]);
+export type TaskDownloadErrorCode = z.infer<typeof taskDownloadErrorCodeSchema>;

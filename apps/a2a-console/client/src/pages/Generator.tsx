@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { CheckCircle2, ClipboardList, FileText, Loader2, WandSparkles } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -410,6 +411,19 @@ export default function Generator() {
                       位置：<code>{createdTask.task_path}</code>
                     </p>
                     <p>请把这个任务包交给技术同事，在 Cursor / Codex 中继续。</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button asChild size="sm" variant="outline">
+                        <a
+                          href={`/api/a2a/tasks/${createdTask.task_id}/download`}
+                          download={`${createdTask.task_id}.zip`}
+                        >
+                          下载任务包 (.zip)
+                        </a>
+                      </Button>
+                      <Button asChild size="sm" variant="ghost">
+                        <Link to={`/tasks/${createdTask.task_id}`}>查看任务详情</Link>
+                      </Button>
+                    </div>
                   </AlertDescription>
                 </Alert>
               ) : null}

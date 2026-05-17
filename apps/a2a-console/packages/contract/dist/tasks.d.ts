@@ -181,3 +181,5 @@ export declare const taskDetailResponseSchema: z.ZodObject<{
 export type ParsedMarkdownPayload = z.infer<typeof parsedMarkdownSchema>;
 export type TaskSummary = z.infer<typeof taskSummarySchema>;
 export type TaskDetailResponse = z.infer<typeof taskDetailResponseSchema>;
+export declare const taskDownloadErrorCodeSchema: z.ZodEnum<["TASK_NOT_FOUND", "TASK_PACKAGE_TOO_LARGE", "PATH_TRAVERSAL", "PROJECT_ROOT_MISSING"]>;
+export type TaskDownloadErrorCode = z.infer<typeof taskDownloadErrorCodeSchema>;

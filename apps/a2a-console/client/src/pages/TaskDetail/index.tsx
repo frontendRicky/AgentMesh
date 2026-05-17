@@ -9,10 +9,12 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { MiniTimeline } from '@/components/TimelineNode';
 import { useTaskDetail } from '@/hooks/useTaskDetail';
 import { useBlockers } from '@/hooks/useBlockers';
+import { useSettingsStore } from '@/store/settingsStore';
 import { agentMetaOf } from '@/constants/agent-meta';
 import type { CurrentStatus } from '@/types/state';
 
 import Chat from './Chat';
+import OrdinaryView from './OrdinaryView';
 import Overview from './Overview';
 import Timeline from './Timeline';
 import Artifacts from './Artifacts';
@@ -24,6 +26,7 @@ export default function TaskDetail() {
   const { taskId } = useParams<{ taskId: string }>();
   const { data, error, loading } = useTaskDetail(taskId ?? null);
   const { data: blockers } = useBlockers(taskId ?? null);
+  const expertMode = useSettingsStore((s) => s.expertMode);
 
   if (!taskId) {
     return <div className="p-6">缺少 taskId 参数</div>;
@@ -53,6 +56,10 @@ export default function TaskDetail() {
     );
   }
   if (!data) return null;
+
+  if (!expertMode) {
+    return <OrdinaryView taskId={taskId} data={data} />;
+  }
 
   const status = data.state.current_status as CurrentStatus;
   const isBlocked = (blockers?.items?.length ?? 0) > 0;
