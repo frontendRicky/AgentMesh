@@ -4,6 +4,7 @@ import express from 'express';
 import { createApp } from './app.js';
 import { logger } from './lib/logger.js';
 import { loadConfig, getConfigFilePath } from './config/config-store.js';
+import { queueRouter } from './routes/queue.js';
 import { runsRouter } from './routes/runs.js';
 
 const PORT = Number(process.env.A2A_CONSOLE_PORT ?? 5174);
@@ -13,6 +14,7 @@ const config = loadConfig();
 
 app.use(cors({ origin: ['http://localhost:5173'] }));
 app.use(express.json({ limit: '64kb' }));
+app.use('/api/a2a/queue', queueRouter);
 app.use('/api/a2a/runs', runsRouter);
 app.use(createApp());
 

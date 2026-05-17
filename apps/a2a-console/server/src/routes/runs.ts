@@ -2,44 +2,24 @@ import { Router } from 'express';
 import { z } from 'zod';
 
 import { fail, ok } from './_helpers.js';
+import { runPool, type RunPriority, type RunStatus } from '../store/run-pool.js';
 
 export const runsRouter = Router();
 
 const TASK_ID_RE = /^T-\d{4}-\d{3}$/;
 
-const runStatusSchema = z.enum([
-  'queued',
-  'running',
-  'paused',
-  'cancelled',
-  'completed',
-  'failed',
-]);
+const runPrioritySchema = z.enum(['urgent', 'high', 'normal', 'background']);
 
 const createRunRequestSchema = z.object({
   task_id: z.string().regex(TASK_ID_RE),
   agent: z.string().min(1),
   model: z.string().min(1).optional(),
+  priority: runPrioritySchema.optional(),
 }).strict();
 
 const runActionSchema = z.enum(['pause', 'resume', 'cancel']);
 
-type RunStatus = z.infer<typeof runStatusSchema>;
 type RunAction = z.infer<typeof runActionSchema>;
-
-interface RunSession {
-  run_id: string;
-  task_id: string;
-  status: RunStatus;
-  agent: string;
-  model: string;
-  created_at: string;
-  updated_at: string;
-  error_message?: string;
-}
-
-const runs = new Map<string, RunSession>();
-let runSeq = 0;
 
 runsRouter.get('/', (req, res) => {
   const taskId = typeof req.query['task_id'] === 'string' ? req.query['task_id'] : null;
@@ -47,10 +27,7 @@ runsRouter.get('/', (req, res) => {
     return fail(res, 400, 'TASK_ID_INVALID', 'task_id must match ^T-\\d{4}-\\d{3}$');
   }
 
-  const items = Array.from(runs.values()).filter((run) => {
-    return taskId === null || run.task_id === taskId;
-  });
-  return ok(res, items);
+  return ok(res, runPool.list(taskId ?? undefined));
 });
 
 runsRouter.post('/', (req, res) => {
@@ -61,18 +38,14 @@ runsRouter.post('/', (req, res) => {
     });
   }
 
-  const now = new Date().toISOString();
-  const run: RunSession = {
-    run_id: createRunId(),
+  const run = runPool.add({
     task_id: parsed.data.task_id,
     status: 'queued',
+    priority: parsed.data.priority ?? 'normal',
     agent: parsed.data.agent,
     model: parsed.data.model ?? 'default',
-    created_at: now,
-    updated_at: now,
-  };
+  });
 
-  runs.set(run.run_id, run);
   res.status(201);
   return ok(res, run);
 });
@@ -88,21 +61,14 @@ runsRouter.patch('/:runId', (req, res) => {
     return fail(res, 400, 'RUN_ACTION_INVALID', actionResult.message);
   }
 
-  const run = runs.get(runId);
+  const run = runPool.get(runId);
   if (!run) {
     return fail(res, 404, 'RUN_NOT_FOUND', `Run not found: ${runId}`);
   }
 
-  run.status = statusForAction(actionResult.action);
-  run.updated_at = new Date().toISOString();
-  runs.set(runId, run);
-  return ok(res, run);
+  const next = runPool.update(runId, { status: statusForAction(actionResult.action) });
+  return ok(res, next ?? run);
 });
-
-function createRunId(): string {
-  runSeq += 1;
-  return `R-${Date.now()}-${String(runSeq).padStart(4, '0')}`;
-}
 
 function parseRunAction(
   queryAction: unknown,
@@ -128,4 +94,9 @@ function statusForAction(action: RunAction): RunStatus {
   if (action === 'pause') return 'paused';
   if (action === 'resume') return 'running';
   return 'cancelled';
+}
+
+export function parseRunPriority(value: unknown): RunPriority | null {
+  const parsed = runPrioritySchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }

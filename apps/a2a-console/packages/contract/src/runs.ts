@@ -9,10 +9,18 @@ export const RunSessionStatusSchema = z.enum([
   'failed',
 ]);
 
+export const RunPrioritySchema = z.enum([
+  'urgent',
+  'high',
+  'normal',
+  'background',
+]);
+
 export const RunSessionSchema = z.object({
   run_id: z.string(),
   task_id: z.string(),
   status: RunSessionStatusSchema,
+  priority: RunPrioritySchema.default('normal'),
   agent: z.string(),
   model: z.string(),
   created_at: z.string(),
@@ -24,6 +32,7 @@ export const RunSessionCreateRequestSchema = z.object({
   task_id: z.string(),
   agent: z.string(),
   model: z.string().optional(),
+  priority: RunPrioritySchema.optional(),
 }).strict();
 
 export const RunSessionActionSchema = z.enum(['pause', 'resume', 'cancel']);
@@ -33,6 +42,7 @@ export const RunSessionPatchRequestSchema = z.object({
 }).strict();
 
 export type RunSessionStatus = z.infer<typeof RunSessionStatusSchema>;
+export type RunPriority = z.infer<typeof RunPrioritySchema>;
 export type RunSession = z.infer<typeof RunSessionSchema>;
 export type RunSessionCreateRequest = z.infer<typeof RunSessionCreateRequestSchema>;
 export type RunSessionAction = z.infer<typeof RunSessionActionSchema>;
