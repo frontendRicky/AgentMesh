@@ -1,6 +1,6 @@
 ---
-active_task_id: T-2026-006
-last_switched_at: 2026-05-15T23:02:00+08:00
+active_task_id: null
+last_switched_at: 2026-05-17T19:14:55+08:00
 schema_version: a2a/v1
 ---
 
@@ -8,7 +8,7 @@ schema_version: a2a/v1
 
 ## Current
 
-`active_task_id`: T-2026-006
+`active_task_id`: null
 
 ## Runtime Switch History
 
@@ -19,6 +19,7 @@ schema_version: a2a/v1
 | 2026-05-16T18:00:00+08:00 | T-2026-002 | T-2026-003 | Controller：T-2026-002 已 completed；新建 T-2026-003（OpenSpec OS-2026-003 P2 follow-ups）并切换 active |
 | 2026-05-15T22:54:00+08:00 | T-2026-003 | null | Controller：T-2026-003 Final Human Review approved；关闭为 done，active_task_id 暂置空，等待用户下一条显式指令 |
 | 2026-05-15T23:02:00+08:00 | null | T-2026-006 | Controller：用户显式启动 T-2026-006；T-2026-003 已 done；切换 active_task_id 至 T-2026-006 |
+| 2026-05-17T19:14:55+08:00 | T-2026-006 | null | controller: T-2026-006 → null; task completed |
 
 ## Closed Task Archive
 
@@ -26,3 +27,4 @@ schema_version: a2a/v1
 |---|---|---|
 | 2026-05-15T21:42:47+08:00 | T-2026-004 | Final Human Review approved；task closed as done；active_task_id already points to T-2026-003, so no active switch was needed |
 | 2026-05-15T22:54:00+08:00 | T-2026-003 | Final Human Review approved；task closed as done；active_task_id set to null pending next explicit user instruction |
+| 2026-05-17T19:14:55+08:00 | T-2026-006 | Final Review approved；task closed as completed；active_task_id set to null |
