@@ -7,7 +7,31 @@
 
 ## 一句话定义
 
-**AgentMesh** 是一套本地文件驱动的 AI 多 Agent 协作系统，由 **Python A2A Runtime**（状态机执行引擎）和 **Cursor SDK TypeScript Orchestrator**（自动化编排器）两部分组成，让 PM → Architect → Developer → QA → Controller 五个 AI Agent 按严格工作流有序协作完成前端开发任务，全程无需手动复制粘贴 Prompt，遇到 Human Review / 模糊需求时自动暂停等待人工决策。
+**AgentMesh** 是一套本地文件驱动的 A2A 自动编程系统，由 **Python A2A Runtime**（可信状态机 / Policy Gate 底座）、**Runner Adapter**（统一执行器接口）和 **A2A Console**（任务与执行控制台）组成，让 PM → Architect → Developer → QA → Controller 五个 AI Agent 在策略、测试、沙箱和回滚保护下协作完成前端开发任务；Human Review 是冷启动安全网和异常裁判，不是长期默认瓶颈。
+
+---
+
+## 自动化等级 L0–L5
+
+| 等级 | 名称 | 人工参与 | 系统能力 | AgentMesh 目标 |
+|---|---|---:|---|---|
+| L0 | 纯手动 Prompt | 很高 | 人复制粘贴，多模型手工协作 | 历史工作方式 |
+| L1 | 任务包 + 门禁 | 高 | Runtime 管状态，Console 生成任务包 | 当前基础能力 |
+| L2 | 半自动编排 | 中高 | Orchestrator 自动跑 Agent，关键节点人审核 | 短期过渡 |
+| L3 | 选择性自动 | 中低 | 低风险自动审批，高风险人工审批 | 第一个商业可用版本 |
+| L4 | 自动编程闭环 | 低 | 自动写代码、测试、修复、交付；失败才找人 | 核心目标 |
+| L5 | 多 Agent 自治工程团队 | 很低 | 多模型竞争、自动评审、自动回滚、自升级 | 长期愿景 |
+
+## automation_mode
+
+| 模式 | 含义 | 默认策略 |
+|---|---|---|
+| `manual` | 手动模式 | 只生成任务包和 Prompt；所有 Agent 执行与状态推进都由人触发。 |
+| `assisted` | 辅助模式 | 系统可启动 Runner，但 Human Review / Final Review 等关键节点仍暂停等待。 |
+| `selective_auto` | 选择性自动 | 低风险、白名单内、测试通过的变更可自动推进；高风险和异常进入 Human Review。 |
+| `full_auto` | 全自动 | 策略允许范围内自动规划、写代码、测试、修复、交付；人只处理越权、冲突、预算超限或多轮失败。 |
+
+Human Review 的产品定位随 automation_mode 调整：在 `manual` / `assisted` 中承担显式确认；在 `selective_auto` / `full_auto` 中退化为冷启动安全网、风险兜底和异常裁判。
 
 ---
 
@@ -22,7 +46,7 @@
 - **Task 生命周期管理**：`task create / list / active`，创建 Task 写 `task.md` + `state.md` + `active-task.md`
 - **Prompt 生成**：为 PM / Architect / Developer / QA / Controller 生成带严格 `[A2A]` 头和 Recommended Model 段的 Cursor Prompt，不执行
 - **Developer Gate 门禁**：写源码前五条硬检：state 必须是 `developer_processing` + `human_review_status=approved` + 路径在 `file-change-plan` 白名单 + 不命中禁改集（`.github/`、`package.json`、CI/CD、Dockerfile 等）
-- **Human Review 双步流转**：`review approve/reject`，不允许合并两步
+- **Human Review 双步流转**：`review approve/reject`，冷启动阶段作为安全网；后续由 Policy Gate 决定是否需要人工介入，不允许合并两步
 - **两阶段 Blocker**：专业 Agent 只能发 `blocker-request`，正式 Blocker 只能由 Controller 创建
 - **P0/P1 Risk Gate**：P0/P1 风险必须显式人工决策，Final Delivery 前必须清零
 - **模型推荐**：`model recommend --agent <pm|architect|developer|qa|controller> --tool <cursor|codex>`，只输出建议，不执行
@@ -117,7 +141,7 @@ start-task → Controller 创建 Task → PM 写需求产物 → Architect 写�
 ## 适用场景
 
 - 前端工程团队用 Cursor 开发新功能 / 重构 / Bug Fix，需要 AI Agent 协助但不想 AI 未经审核直接改代码
-- 需要 PM 写需求 → Architect 出方案 → 人工审核 → Developer 有限改代码 → QA 验收这套有保障的流程
+- 需要 PM 写需求 → Architect 出方案 → Policy Gate / Human Review 决策 → Developer 有限或自动改代码 → QA 验收这套有保障的流程
 - 希望 AI 操作有完整审计链（每个产物含 task_id / created_at / produced_by，每个状态转移有历史记录）
 - 希望 P0/P1 风险必须人工决策，不被 AI 自动绕过
 
@@ -125,11 +149,11 @@ start-task → Controller 创建 Task → PM 写需求产物 → Architect 写�
 
 ## 关键约束
 
-1. **Runtime 不执行 LLM**：所有 Prompt 生成后由人工复制到 Cursor，Runtime 只做状态管理和门禁
+1. **Runtime 不直接当写手**：Runtime 负责状态管理、门禁、策略和产物校验；实际执行经 Runner Adapter / Orchestrator 完成
 2. **每次操作必须带 `--project-root`**：Runtime 通过它定位项目内的 `.ai-agents/workspace/`
 3. **写源码前必须先跑 Gate**：`a2a-agent gate developer --path <文件> --operation modify --json`
 4. **state.md 只有 Controller 能写**，其他 Agent 不得直接改
-5. **Human Review 是真实人工操作**：Runtime 不会伪造 review record
+5. **Human Review 是冷启动安全网**：Runtime 不会伪造 review record；低风险自动化由 Policy Gate 明确放行，高风险或异常仍进入人工裁决
 6. **Task workspace 属于各自项目**：不允许全局共用同一个 workspace 管理多个项目的 Task
 
 ---

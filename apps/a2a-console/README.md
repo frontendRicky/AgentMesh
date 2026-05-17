@@ -1,6 +1,21 @@
 # A2A Console
 
-> 本地可运行的 A2A Runtime 可视化驾驶舱。默认进入中文普通模式，帮助非技术同事填写需求并生成前端项目任务包；专家模式保留任务、Agent 协作、Timeline、产物、Token / Context 估算、模型选择和启动 Prompt 关键字视图。**不调用 LLM，不自动执行 Agent。**
+> 本地可运行的 A2A Runtime 可视化驾驶舱。默认进入中文普通模式，帮助非技术同事填写需求、生成前端项目任务包，并在 Phase 1 MVP 中提供 RunSession 执行控制入口；专家模式保留任务、Agent 协作、Timeline、产物、Token / Context 估算、模型选择和启动 Prompt 关键字视图。Human Review 是冷启动安全网，后续会逐步由 Policy Gate 判断哪些任务可自动推进。
+
+## 自动化叙事
+
+Console 正在从 L1「任务包 + 门禁」升级到 L2/L3「半自动编排 / 选择性自动」：
+
+| 等级 | 名称 | Console 定位 |
+|---|---|---|
+| L0 | 纯手动 Prompt | 人手动复制 Prompt，多模型协作 |
+| L1 | 任务包 + 门禁 | 生成任务包、查看状态、下载交付物 |
+| L2 | 半自动编排 | RunSession 管理执行请求，关键节点仍暂停 |
+| L3 | 选择性自动 | 低风险任务按 Policy Gate 自动推进 |
+| L4 | 自动编程闭环 | 自动写代码、测试、修复、交付 |
+| L5 | 多 Agent 自治工程团队 | 多任务并线、自升级、多模型评审 |
+
+`automation_mode` 将用于描述项目或任务的自动化策略：`manual` / `assisted` / `selective_auto` / `full_auto`。
 
 ## 快速启动
 
@@ -25,7 +40,7 @@ npm run dev
 |---|---|
 | `/` | 跳转到 `/generator` |
 | `/generator` | 普通模式：中文前端项目生成向导 |
-| `/tasks` | 普通模式显示“我的任务”；专家模式显示全部 Task 列表 |
+| `/tasks` | 普通模式显示“我的任务”并提供查看 / 执行 / 下载；专家模式显示全部 Task 列表 |
 | `/dashboard` | 专家模式群聊主视图 |
 | `/tasks/:taskId` | 专家模式单 Task 详情，7 Tab：群聊 / 概览 / 时间线 / Artifacts / 风险 / 指标 / Model & Prompt |
 | `/blockers` | 当前 active task 的 blocker 速览 |
@@ -53,11 +68,14 @@ apps/a2a-console/
 
 ## 已落地（ST-01 ~ ST-08）
 
-**Server（12 GET + 1 POST）**
+**Server**
 - `/api/a2a/health`、`/api/a2a/config/project-root`（GET/POST）、`/api/a2a/active-task`
 - `/api/a2a/tasks`、`/tasks/:taskId`、`/tasks/:taskId/state`
 - `GET /api/a2a/tasks/:taskId/download` — 下载任务包（ZIP STORE，50MB 上限）
 - `GET /api/a2a/config/project-root` — 读取当前 project_root 配置
+- `GET /api/a2a/runs?task_id=T-YYYY-NNN` — 查询内存 RunSession 列表
+- `POST /api/a2a/runs` — 创建 RunSession（Phase 1 MVP：queued，仅内存）
+- `PATCH /api/a2a/runs/:runId?action=pause|resume|cancel` — 更新 RunSession 状态
 - `/tasks/:taskId/artifacts`（树）、`/tasks/:taskId/artifacts/file?path=...`（单文件，含 truncated 标记）
 - `/tasks/:taskId/messages`、`/tasks/:taskId/blockers`、`/tasks/:taskId/reviews`
 - `/tasks/:taskId/human-reviews`（deprecated，兼容旧 client）
@@ -71,14 +89,15 @@ apps/a2a-console/
 - Dashboard chat-first 群聊主视图 + 右侧 320px 状态摘要面板
 - Generator 中文向导：项目类型、业务说明、页面范围、生成偏好、模型档位、任务包预览
 - 7 Tab Task Detail（Chat 默认）：Overview / Timeline / Artifacts（文件树 + Markdown 预览） / Risk / Metrics（Recharts 双柱图 + Top10）/ Model & Prompt
-- Tasks 列表 + Settings + Blockers + 独立 Model & Prompt 页
+- Tasks 列表（普通模式含“执行”按钮，写入 RunSession queue）+ Settings + Blockers + 独立 Model & Prompt 页
 - 14 个 minimal shadcn-style UI 组件（基于 @radix-ui）+ 9 个业务组件
 - 11 个数据 hook，统一 5s 轮询（可在设置页改）
 
 ## 已知限制（MVP 边界）
 
-- 不调用 LLM、不执行任何 `a2a-agent` CLI（关键字按钮只复制到剪贴板）
+- Phase 1 MVP 的 `/runs` 只维护内存 RunSession；RunnerAdapter 与 Cursor SDK Runner 仍是接口骨架，不真正调用 LLM / Cursor SDK
 - 普通模式只创建新的 `.ai-agents/workspace/T-YYYY-NNN/` 任务包，不修改 existing task 的 `state.md`
+- `GET /api/a2a/runs` 重启后清空，不持久化
 - task_id 由 server 按当前年份自增分配；client 只传 slug
 - 不写 `apps/generated-projects/`，不提供隐藏开关或 feature flag 启用一键执行
 - 单 markdown >500KB 仅预览前 100KB（带 truncated 警告）
@@ -106,6 +125,10 @@ curl -s "http://localhost:5174/api/a2a/tasks/T-2026-003/metrics" | jq '.data.lar
 curl -s "http://localhost:5174/api/a2a/tasks/T-2026-003/reviews"
 curl -s "http://localhost:5174/api/a2a/tasks/T-2026-003/human-reviews"
 curl -OJ "http://localhost:5174/api/a2a/tasks/T-2026-003/download"
+curl -s "http://localhost:5174/api/a2a/runs?task_id=T-2026-003"
+curl -s -X POST "http://localhost:5174/api/a2a/runs" \
+  -H "content-type: application/json" \
+  -d '{"task_id":"T-2026-003","agent":"developer"}'
 ```
 
 ## 参考文档
