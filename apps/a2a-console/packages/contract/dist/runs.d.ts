@@ -1,11 +1,14 @@
 import { z } from 'zod';
 export declare const RunSessionStatusSchema: z.ZodEnum<["queued", "running", "paused", "cancelled", "completed", "failed"]>;
 export declare const RunPrioritySchema: z.ZodEnum<["urgent", "high", "normal", "background"]>;
+export declare const RunLockStatusSchema: z.ZodEnum<["unlocked", "acquiring", "locked", "waiting_for_lock"]>;
 export declare const RunSessionSchema: z.ZodObject<{
     run_id: z.ZodString;
     task_id: z.ZodString;
     status: z.ZodEnum<["queued", "running", "paused", "cancelled", "completed", "failed"]>;
     priority: z.ZodDefault<z.ZodEnum<["urgent", "high", "normal", "background"]>>;
+    lock_status: z.ZodDefault<z.ZodEnum<["unlocked", "acquiring", "locked", "waiting_for_lock"]>>;
+    locked_files: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
     agent: z.ZodString;
     model: z.ZodString;
     created_at: z.ZodString;
@@ -19,6 +22,8 @@ export declare const RunSessionSchema: z.ZodObject<{
     updated_at: string;
     model: string;
     run_id: string;
+    lock_status: "unlocked" | "acquiring" | "locked" | "waiting_for_lock";
+    locked_files: string[];
     agent: string;
     error_message?: string | undefined;
 }, {
@@ -30,6 +35,8 @@ export declare const RunSessionSchema: z.ZodObject<{
     run_id: string;
     agent: string;
     priority?: "high" | "urgent" | "normal" | "background" | undefined;
+    lock_status?: "unlocked" | "acquiring" | "locked" | "waiting_for_lock" | undefined;
+    locked_files?: string[] | undefined;
     error_message?: string | undefined;
 }>;
 export declare const RunSessionCreateRequestSchema: z.ZodObject<{
@@ -58,6 +65,7 @@ export declare const RunSessionPatchRequestSchema: z.ZodObject<{
 }>;
 export type RunSessionStatus = z.infer<typeof RunSessionStatusSchema>;
 export type RunPriority = z.infer<typeof RunPrioritySchema>;
+export type RunLockStatus = z.infer<typeof RunLockStatusSchema>;
 export type RunSession = z.infer<typeof RunSessionSchema>;
 export type RunSessionCreateRequest = z.infer<typeof RunSessionCreateRequestSchema>;
 export type RunSessionAction = z.infer<typeof RunSessionActionSchema>;

@@ -13,11 +13,19 @@ export const RunPrioritySchema = z.enum([
     'normal',
     'background',
 ]);
+export const RunLockStatusSchema = z.enum([
+    'unlocked',
+    'acquiring',
+    'locked',
+    'waiting_for_lock',
+]);
 export const RunSessionSchema = z.object({
     run_id: z.string(),
     task_id: z.string(),
     status: RunSessionStatusSchema,
     priority: RunPrioritySchema.default('normal'),
+    lock_status: RunLockStatusSchema.default('unlocked'),
+    locked_files: z.array(z.string()).default([]),
     agent: z.string(),
     model: z.string(),
     created_at: z.string(),

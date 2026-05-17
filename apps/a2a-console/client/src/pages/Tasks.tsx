@@ -15,12 +15,15 @@ import { cn } from '@/lib/cn';
 
 type RunStatus = 'queued' | 'running' | 'paused' | 'cancelled' | 'completed' | 'failed';
 type RunPriority = 'urgent' | 'high' | 'normal' | 'background';
+type RunLockStatus = 'unlocked' | 'acquiring' | 'locked' | 'waiting_for_lock';
 
 interface RunSession {
   run_id: string;
   task_id: string;
   status: RunStatus;
   priority: RunPriority;
+  lock_status?: RunLockStatus;
+  locked_files?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -226,9 +229,21 @@ function RunStatusBadge({ run }: { run: RunSession | null }) {
   if (!run) return null;
   const meta = runStatusMeta[run.status];
   return (
-    <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium', meta.className)}>
-      {meta.label}
-    </span>
+    <>
+      <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium', meta.className)}>
+        {meta.label}
+      </span>
+      {run.lock_status === 'waiting_for_lock' ? (
+        <span className="rounded bg-yellow-100 px-1.5 py-0.5 text-[10px] font-medium text-yellow-800">
+          等待锁
+        </span>
+      ) : null}
+      {run.status === 'running' && run.lock_status === 'locked' ? (
+        <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+          锁定
+        </span>
+      ) : null}
+    </>
   );
 }
 
@@ -259,6 +274,14 @@ function isRunSession(value: unknown): value is RunSession {
     && typeof record['task_id'] === 'string'
     && isRunStatus(record['status'])
     && isRunPriority(record['priority'])
+    && (record['lock_status'] === undefined || isRunLockStatus(record['lock_status']))
+    && (
+      record['locked_files'] === undefined
+      || (
+        Array.isArray(record['locked_files'])
+        && record['locked_files'].every((path) => typeof path === 'string')
+      )
+    )
     && typeof record['created_at'] === 'string'
     && typeof record['updated_at'] === 'string'
   );
@@ -277,4 +300,13 @@ function isRunStatus(value: unknown): value is RunStatus {
 
 function isRunPriority(value: unknown): value is RunPriority {
   return value === 'urgent' || value === 'high' || value === 'normal' || value === 'background';
+}
+
+function isRunLockStatus(value: unknown): value is RunLockStatus {
+  return (
+    value === 'unlocked'
+    || value === 'acquiring'
+    || value === 'locked'
+    || value === 'waiting_for_lock'
+  );
 }

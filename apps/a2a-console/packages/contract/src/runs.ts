@@ -16,11 +16,20 @@ export const RunPrioritySchema = z.enum([
   'background',
 ]);
 
+export const RunLockStatusSchema = z.enum([
+  'unlocked',
+  'acquiring',
+  'locked',
+  'waiting_for_lock',
+]);
+
 export const RunSessionSchema = z.object({
   run_id: z.string(),
   task_id: z.string(),
   status: RunSessionStatusSchema,
   priority: RunPrioritySchema.default('normal'),
+  lock_status: RunLockStatusSchema.default('unlocked'),
+  locked_files: z.array(z.string()).default([]),
   agent: z.string(),
   model: z.string(),
   created_at: z.string(),
@@ -43,6 +52,7 @@ export const RunSessionPatchRequestSchema = z.object({
 
 export type RunSessionStatus = z.infer<typeof RunSessionStatusSchema>;
 export type RunPriority = z.infer<typeof RunPrioritySchema>;
+export type RunLockStatus = z.infer<typeof RunLockStatusSchema>;
 export type RunSession = z.infer<typeof RunSessionSchema>;
 export type RunSessionCreateRequest = z.infer<typeof RunSessionCreateRequestSchema>;
 export type RunSessionAction = z.infer<typeof RunSessionActionSchema>;
