@@ -1,0 +1,40 @@
+import { z } from 'zod';
+export declare const ProjectTypeSchema: z.ZodEnum<["self_upgrade", "client_project", "generated_project", "maintenance"]>;
+export declare const ProjectAutomationModeSchema: z.ZodEnum<["manual", "assisted", "selective_auto", "full_auto"]>;
+export declare const ProjectSchema: z.ZodObject<{
+    project_id: z.ZodString;
+    project_name: z.ZodString;
+    project_root: z.ZodString;
+    project_type: z.ZodEnum<["self_upgrade", "client_project", "generated_project", "maintenance"]>;
+    automation_mode: z.ZodDefault<z.ZodEnum<["manual", "assisted", "selective_auto", "full_auto"]>>;
+    max_parallel_runs: z.ZodDefault<z.ZodNumber>;
+    allowed_paths: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
+    blocked_paths: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
+    created_at: z.ZodString;
+    updated_at: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    created_at: string;
+    updated_at: string;
+    project_name: string;
+    project_type: "self_upgrade" | "client_project" | "generated_project" | "maintenance";
+    project_id: string;
+    project_root: string;
+    automation_mode: "manual" | "assisted" | "selective_auto" | "full_auto";
+    max_parallel_runs: number;
+    allowed_paths: string[];
+    blocked_paths: string[];
+}, {
+    created_at: string;
+    updated_at: string;
+    project_name: string;
+    project_type: "self_upgrade" | "client_project" | "generated_project" | "maintenance";
+    project_id: string;
+    project_root: string;
+    automation_mode?: "manual" | "assisted" | "selective_auto" | "full_auto" | undefined;
+    max_parallel_runs?: number | undefined;
+    allowed_paths?: string[] | undefined;
+    blocked_paths?: string[] | undefined;
+}>;
+export type ProjectType = z.infer<typeof ProjectTypeSchema>;
+export type ProjectAutomationMode = z.infer<typeof ProjectAutomationModeSchema>;
+export type Project = z.infer<typeof ProjectSchema>;

@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from '@/layouts/AppLayout';
 import Dashboard from '@/pages/Dashboard';
 import Generator from '@/pages/Generator';
+import Projects from '@/pages/Projects';
 import Tasks from '@/pages/Tasks';
 import TaskDetail from '@/pages/TaskDetail';
 import Settings from '@/pages/Settings';
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/" element={<AppLayout />}>
           <Route index element={<Navigate to="/generator" replace />} />
           <Route path="generator" element={<Generator />} />
+          <Route path="projects" element={<Projects />} />
           <Route path="dashboard" element={<ExpertOnly><Dashboard /></ExpertOnly>} />
           <Route path="tasks" element={<Tasks />} />
           <Route path="tasks/:taskId" element={<TaskDetail />} />

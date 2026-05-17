@@ -1,4 +1,4 @@
-import { Boxes, Gauge, ListChecks, MessageCircle, Settings, SlidersHorizontal, WandSparkles } from 'lucide-react';
+import { Boxes, FolderKanban, Gauge, ListChecks, MessageCircle, Settings, SlidersHorizontal, WandSparkles } from 'lucide-react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 
 import { AgentAvatar } from '@/components/AgentAvatar';
@@ -84,6 +84,7 @@ export function AppLayout() {
             <div className="mt-auto flex w-full flex-col items-stretch gap-1 border-t border-border px-2 pt-3 text-[11px]">
               <NavItem to="/dashboard" icon={<MessageCircle className="h-4 w-4" />} label="群聊" />
               <NavItem to="/tasks" icon={<ListChecks className="h-4 w-4" />} label="Tasks" />
+              <NavItem to="/projects" icon={<FolderKanban className="h-4 w-4" />} label="项目" />
               <NavItem to="/artifacts" icon={<Boxes className="h-4 w-4" />} label="Artifacts" />
               <NavItem to="/model-prompt" icon={<Gauge className="h-4 w-4" />} label="模型" />
               <NavItem to="/settings" icon={<Settings className="h-4 w-4" />} label="设置" />
@@ -93,6 +94,7 @@ export function AppLayout() {
           <div className="flex w-full flex-col items-stretch gap-1 px-2 text-[11px]">
             <NavItem to="/generator" icon={<WandSparkles className="h-4 w-4" />} label="生成项目" />
             <NavItem to="/tasks" icon={<ListChecks className="h-4 w-4" />} label="我的任务" />
+            <NavItem to="/projects" icon={<FolderKanban className="h-4 w-4" />} label="项目" />
             <NavItem to="/settings" icon={<Settings className="h-4 w-4" />} label="设置" />
           </div>
         )}
