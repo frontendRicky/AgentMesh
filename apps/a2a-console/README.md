@@ -42,7 +42,7 @@ npm run dev
 | `/generator` | 普通模式：中文前端项目生成向导 |
 | `/tasks` | 普通模式显示“我的任务”并提供查看 / 执行 / 下载；专家模式显示全部 Task 列表 |
 | `/dashboard` | 专家模式群聊主视图 |
-| `/tasks/:taskId` | 专家模式单 Task 详情，7 Tab：群聊 / 概览 / 时间线 / Artifacts / 风险 / 指标 / Model & Prompt |
+| `/tasks/:taskId` | 专家模式单 Task 详情，8 Tab：群聊 / 概览 / 时间线 / Artifacts / 风险 / 指标 / Model & Prompt / Sandbox |
 | `/blockers` | 当前 active task 的 blocker 速览 |
 | `/model-prompt` | 单独的模型选择 + Prompt 关键字页面 |
 | `/settings` | 项目根 + 轮询间隔 |
@@ -76,6 +76,9 @@ apps/a2a-console/
 - `GET /api/a2a/runs?task_id=T-YYYY-NNN` — 查询内存 RunSession 列表
 - `POST /api/a2a/runs` — 创建 RunSession（Phase 1 MVP：queued，仅内存）
 - `PATCH /api/a2a/runs/:runId?action=pause|resume|cancel` — 更新 RunSession 状态
+- `POST /api/a2a/context/build`、`GET /api/a2a/context/:packId`、`GET /api/a2a/context?task_id=&agent=` — 生成和读取最小上下文包
+- `POST /api/a2a/sandbox/init`、`GET /api/a2a/sandbox/:runId/diff`、`POST /api/a2a/sandbox/:runId/apply|rollback` — 本地沙箱初始化、diff、应用和回滚
+- `POST /api/a2a/test/run`、`GET /api/a2a/test/:runId?project_id=` — 受限 typecheck/lint/build 测试运行器
 - `/tasks/:taskId/artifacts`（树）、`/tasks/:taskId/artifacts/file?path=...`（单文件，含 truncated 标记）
 - `/tasks/:taskId/messages`、`/tasks/:taskId/blockers`、`/tasks/:taskId/reviews`
 - `/tasks/:taskId/human-reviews`（deprecated，兼容旧 client）
@@ -88,7 +91,7 @@ apps/a2a-console/
 - 100px 左 sidebar：普通模式只显示“生成项目 / 我的任务 / 设置”；专家模式显示 6 Agent 头像 + 专家 nav
 - Dashboard chat-first 群聊主视图 + 右侧 320px 状态摘要面板
 - Generator 中文向导：项目类型、业务说明、页面范围、生成偏好、模型档位、任务包预览
-- 7 Tab Task Detail（Chat 默认）：Overview / Timeline / Artifacts（文件树 + Markdown 预览） / Risk / Metrics（Recharts 双柱图 + Top10）/ Model & Prompt
+- 8 Tab Task Detail（Chat 默认）：Overview / Timeline / Artifacts（文件树 + Markdown 预览） / Risk / Metrics（Recharts 双柱图 + Top10）/ Model & Prompt / Sandbox
 - Tasks 列表（普通模式含“执行”按钮，写入 RunSession queue）+ Settings + Blockers + 独立 Model & Prompt 页
 - 14 个 minimal shadcn-style UI 组件（基于 @radix-ui）+ 9 个业务组件
 - 11 个数据 hook，统一 5s 轮询（可在设置页改）
@@ -96,6 +99,7 @@ apps/a2a-console/
 ## 已知限制（MVP 边界）
 
 - Phase 1 MVP 的 `/runs` 只维护内存 RunSession；RunnerAdapter 与 Cursor SDK Runner 仍是接口骨架，不真正调用 LLM / Cursor SDK
+- Context Pack 使用 length/4 估算 token，不接真实 LLM；Sandbox 仅本地文件系统；Test Runner 只跑 package.json 中的 typecheck/lint/build scripts
 - 普通模式只创建新的 `.ai-agents/workspace/T-YYYY-NNN/` 任务包，不修改 existing task 的 `state.md`
 - `GET /api/a2a/runs` 重启后清空，不持久化
 - task_id 由 server 按当前年份自增分配；client 只传 slug
@@ -129,6 +133,9 @@ curl -s "http://localhost:5174/api/a2a/runs?task_id=T-2026-003"
 curl -s -X POST "http://localhost:5174/api/a2a/runs" \
   -H "content-type: application/json" \
   -d '{"task_id":"T-2026-003","agent":"developer"}'
+curl -s -X POST "http://localhost:5174/api/a2a/context/build" \
+  -H "content-type: application/json" \
+  -d '{"task_id":"T-2026-007","agent":"developer"}'
 ```
 
 ## 参考文档

@@ -26,6 +26,7 @@ import Artifacts from './Artifacts';
 import Risk from './Risk';
 import Metrics from './Metrics';
 import ModelPromptTab from './ModelPromptTab';
+import SandboxTab from './SandboxTab';
 
 export default function TaskDetail() {
   const { taskId } = useParams<{ taskId: string }>();
@@ -33,6 +34,7 @@ export default function TaskDetail() {
   const { data: blockers } = useBlockers(taskId ?? null);
   const expertMode = useSettingsStore((s) => s.expertMode);
   const policyDecision = usePolicyDecision(taskId ?? null, expertMode);
+  const contextPack = useContextPack(taskId ?? null, expertMode, data?.state.current_agent);
 
   if (!taskId) {
     return <div className="p-6">缺少 taskId 参数</div>;
@@ -88,7 +90,7 @@ export default function TaskDetail() {
               当前 {agentMetaOf(data.state.current_agent).name} · 下一棒 {agentMetaOf(data.state.next_agent).name} · 更新于 {data.state.updated_at}
             </p>
           </div>
-          {policyDecision ? <PolicySuggestionCard decision={policyDecision} /> : null}
+          <ExpertSideCards policyDecision={policyDecision} contextPack={contextPack} />
         </div>
         <div className="mt-3">
           <MiniTimeline current={status} isBlocked={isBlocked} />
@@ -108,6 +110,7 @@ export default function TaskDetail() {
             </TabsTrigger>
             <TabsTrigger value="metrics" className="data-[state=active]:bg-muted">指标</TabsTrigger>
             <TabsTrigger value="model" className="data-[state=active]:bg-muted">Model & Prompt</TabsTrigger>
+            <TabsTrigger value="sandbox" className="data-[state=active]:bg-muted">Sandbox</TabsTrigger>
           </TabsList>
         </div>
 
@@ -119,10 +122,26 @@ export default function TaskDetail() {
           <TabsContent value="risk" className="h-full mt-0 overflow-y-auto scrollbar-thin"><Risk taskId={taskId} /></TabsContent>
           <TabsContent value="metrics" className="h-full mt-0 overflow-y-auto scrollbar-thin"><Metrics taskId={taskId} /></TabsContent>
           <TabsContent value="model" className="h-full mt-0 overflow-y-auto scrollbar-thin"><ModelPromptTab taskId={taskId} status={status} /></TabsContent>
+          <TabsContent value="sandbox" className="h-full mt-0"><SandboxTab taskId={taskId} /></TabsContent>
         </div>
       </Tabs>
     </div>
   );
+}
+
+interface ContextPack {
+  pack_id: string;
+  task_id: string;
+  agent: 'pm' | 'architect' | 'developer' | 'qa' | 'fix' | 'security';
+  items: Array<{
+    type: string;
+    inclusion_reason: string;
+    estimated_tokens: number;
+    truncated: boolean;
+  }>;
+  total_estimated_input_tokens: number;
+  full_context: boolean;
+  created_at: string;
 }
 
 interface PolicyDecision {
@@ -169,9 +188,56 @@ function usePolicyDecision(taskId: string | null, enabled: boolean): PolicyDecis
   return decision;
 }
 
+function useContextPack(taskId: string | null, enabled: boolean, currentAgent: unknown): ContextPack | null {
+  const [pack, setPack] = useState<ContextPack | null>(null);
+
+  useEffect(() => {
+    const agent = mapContextAgent(currentAgent);
+    if (!taskId || !enabled || !agent) {
+      setPack(null);
+      return;
+    }
+
+    let cancelled = false;
+    apiPost<unknown>('/api/a2a/context/build', {
+      task_id: taskId,
+      agent,
+    })
+      .then((raw) => {
+        if (cancelled) return;
+        setPack(isContextPack(raw) ? raw : null);
+      })
+      .catch(() => {
+        if (!cancelled) setPack(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [taskId, enabled, currentAgent]);
+
+  return pack;
+}
+
+function ExpertSideCards({
+  policyDecision,
+  contextPack,
+}: {
+  policyDecision: PolicyDecision | null;
+  contextPack: ContextPack | null;
+}) {
+  if (!policyDecision && !contextPack) return null;
+  return (
+    <div className="hidden w-[320px] shrink-0 flex-col gap-2 lg:flex">
+      {policyDecision ? <PolicySuggestionCard decision={policyDecision} /> : null}
+      {contextPack ? <ContextEstimateCard pack={contextPack} /> : null}
+    </div>
+  );
+}
+
 function PolicySuggestionCard({ decision }: { decision: PolicyDecision }) {
   return (
-    <div className="hidden w-[320px] shrink-0 rounded-md border border-border bg-muted/30 p-3 lg:block">
+    <div className="rounded-md border border-border bg-muted/30 p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-medium">Policy 建议</p>
         <Badge variant="outline" className={cn('font-mono', riskBadgeClass(decision.risk_level))}>
@@ -184,6 +250,29 @@ function PolicySuggestionCard({ decision }: { decision: PolicyDecision }) {
       <ul className="mt-2 space-y-1 text-[11px] text-muted-foreground">
         {decision.reasons.slice(0, 3).map((reason) => (
           <li key={reason} className="line-clamp-2">{reason}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ContextEstimateCard({ pack }: { pack: ContextPack }) {
+  return (
+    <div className="rounded-md border border-border bg-muted/30 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium">Context 估算</p>
+        <Badge variant="outline" className="font-mono">
+          {pack.total_estimated_input_tokens}
+        </Badge>
+      </div>
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        {pack.agent} · {pack.items.length} items
+      </p>
+      <ul className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+        {pack.items.slice(0, 3).map((item) => (
+          <li key={`${item.type}-${item.inclusion_reason}`} className="line-clamp-2">
+            {item.inclusion_reason}
+          </li>
         ))}
       </ul>
     </div>
@@ -229,4 +318,50 @@ function isRiskLevel(value: unknown): value is PolicyDecision['risk_level'] {
 
 function isBudgetStatus(value: unknown): value is PolicyDecision['budget_status'] {
   return value === 'ok' || value === 'warning' || value === 'breached';
+}
+
+function mapContextAgent(value: unknown): ContextPack['agent'] | null {
+  if (value === 'pm') return 'pm';
+  if (value === 'architect') return 'architect';
+  if (value === 'developer') return 'developer';
+  if (value === 'qa') return 'qa';
+  if (value === 'controller' || value === 'human') return 'qa';
+  return null;
+}
+
+function isContextPack(value: unknown): value is ContextPack {
+  if (value === null || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record['pack_id'] === 'string'
+    && typeof record['task_id'] === 'string'
+    && isContextAgent(record['agent'])
+    && Array.isArray(record['items'])
+    && record['items'].every(isContextPackItem)
+    && typeof record['total_estimated_input_tokens'] === 'number'
+    && typeof record['full_context'] === 'boolean'
+    && typeof record['created_at'] === 'string'
+  );
+}
+
+function isContextPackItem(value: unknown): value is ContextPack['items'][number] {
+  if (value === null || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record['type'] === 'string'
+    && typeof record['inclusion_reason'] === 'string'
+    && typeof record['estimated_tokens'] === 'number'
+    && typeof record['truncated'] === 'boolean'
+  );
+}
+
+function isContextAgent(value: unknown): value is ContextPack['agent'] {
+  return (
+    value === 'pm'
+    || value === 'architect'
+    || value === 'developer'
+    || value === 'qa'
+    || value === 'fix'
+    || value === 'security'
+  );
 }

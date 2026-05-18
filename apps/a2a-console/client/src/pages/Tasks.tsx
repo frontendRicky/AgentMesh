@@ -16,6 +16,7 @@ import { cn } from '@/lib/cn';
 type RunStatus = 'queued' | 'running' | 'paused' | 'cancelled' | 'completed' | 'failed';
 type RunPriority = 'urgent' | 'high' | 'normal' | 'background';
 type RunLockStatus = 'unlocked' | 'acquiring' | 'locked' | 'waiting_for_lock';
+type RunTestResult = 'pass' | 'fail' | 'timeout';
 
 interface RunSession {
   run_id: string;
@@ -24,6 +25,9 @@ interface RunSession {
   priority: RunPriority;
   lock_status?: RunLockStatus;
   locked_files?: string[];
+  sandbox_path?: string;
+  last_test_run_at?: string;
+  last_test_result?: RunTestResult | null;
   created_at: string;
   updated_at: string;
 }
@@ -243,6 +247,21 @@ function RunStatusBadge({ run }: { run: RunSession | null }) {
           锁定
         </span>
       ) : null}
+      {run.sandbox_path ? (
+        <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700">
+          沙箱中
+        </span>
+      ) : null}
+      {run.last_test_result === 'fail' ? (
+        <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+          测试失败
+        </span>
+      ) : null}
+      {run.last_test_result === 'timeout' ? (
+        <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700">
+          测试超时
+        </span>
+      ) : null}
     </>
   );
 }
@@ -275,6 +294,13 @@ function isRunSession(value: unknown): value is RunSession {
     && isRunStatus(record['status'])
     && isRunPriority(record['priority'])
     && (record['lock_status'] === undefined || isRunLockStatus(record['lock_status']))
+    && (record['sandbox_path'] === undefined || typeof record['sandbox_path'] === 'string')
+    && (record['last_test_run_at'] === undefined || typeof record['last_test_run_at'] === 'string')
+    && (
+      record['last_test_result'] === undefined
+      || record['last_test_result'] === null
+      || isRunTestResult(record['last_test_result'])
+    )
     && (
       record['locked_files'] === undefined
       || (
@@ -309,4 +335,8 @@ function isRunLockStatus(value: unknown): value is RunLockStatus {
     || value === 'locked'
     || value === 'waiting_for_lock'
   );
+}
+
+function isRunTestResult(value: unknown): value is RunTestResult {
+  return value === 'pass' || value === 'fail' || value === 'timeout';
 }

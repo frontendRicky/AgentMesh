@@ -33,6 +33,15 @@
 | POST | `/api/a2a/project-generator/drafts/:draftId/tasks` | 创建新的 `.ai-agents/workspace/T-YYYY-NNN/` 任务包 |
 | GET | `/api/a2a/config/project-root` | 读取 project_root（无鉴权，只读） |
 | POST | `/api/a2a/config/project-root` | 写 server config，body: `{project_root}` |
+| POST | `/api/a2a/context/build` | 生成 Context Pack（支持 `full_context` reason gate） |
+| GET | `/api/a2a/context/:packId` | 读取单个 Context Pack |
+| GET | `/api/a2a/context?task_id=&agent=` | 查询 Context Pack 列表 |
+| POST | `/api/a2a/sandbox/init` | 初始化本地 sandbox workspace-copy |
+| GET | `/api/a2a/sandbox/:runId/diff` | 读取 sandbox unified diff |
+| POST | `/api/a2a/sandbox/:runId/apply` | 应用 sandbox diff 到主项目（写回前加锁和 .bak） |
+| POST | `/api/a2a/sandbox/:runId/rollback` | 从 .bak 回滚已应用文件 |
+| POST | `/api/a2a/test/run` | 执行受限 test suite：typecheck / lint / build |
+| GET | `/api/a2a/test/:runId?project_id=` | 读取最近 test result |
 
 ## Project Generator
 
@@ -156,6 +165,12 @@ curl -s "http://localhost:5174/api/a2a/tasks/T-2026-003/metrics" | jq '.data.lar
 curl -s "http://localhost:5174/api/a2a/tasks/T-2026-003/reviews"
 curl -s "http://localhost:5174/api/a2a/tasks/T-2026-003/human-reviews"
 curl -OJ "http://localhost:5174/api/a2a/tasks/T-2026-003/download"
+curl -s -X POST "http://localhost:5174/api/a2a/context/build" \
+  -H "content-type: application/json" \
+  -d '{"task_id":"T-2026-007","agent":"developer"}'
+curl -s -X POST "http://localhost:5174/api/a2a/test/run" \
+  -H "content-type: application/json" \
+  -d '{"run_id":"R-demo","project_id":"self-upgrade","suites":["typecheck"]}'
 ```
 
 ## 不存在的接口（MVP 显式不实现）

@@ -34,6 +34,8 @@ node_modules/
 apps/a2a-console/server/.projects-registry.json
 # Token Ledger JSONL is local runtime usage data, not source.
 apps/a2a-console/server/.token-ledger.jsonl
+# AgentMesh sandbox/test runtime files are local execution state, not source.
+.agentmesh/
 
 # ─── A2A workspace task files ────────────────────────────────────────────────
 # Workspace task dirs (T-YYYY-NNN) are project-specific and should NOT be

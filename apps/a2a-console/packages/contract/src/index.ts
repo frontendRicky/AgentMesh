@@ -11,6 +11,13 @@ export * from './messages.js';
 export * from './metrics.js';
 export * from './reviews.js';
 export * from './model-presets.js';
+export * from './runs.js';
+export * from './projects.js';
+export * from './usage.js';
+export * from './policy.js';
+export * from './context.js';
+export * from './sandbox.js';
+export * from './test.js';
 
 export const projectGeneratorTaskIdSchema = z.string().regex(/^T-\d{4}-\d{3}$/);
 export const projectGeneratorDraftIdSchema = z.string().regex(/^D-\d{4}-004-\d{3}$/);

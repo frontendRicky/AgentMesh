@@ -1,5 +1,6 @@
 export type RunPriority = 'urgent' | 'high' | 'normal' | 'background';
 export type RunStatus = 'queued' | 'running' | 'paused' | 'cancelled' | 'completed' | 'failed';
+export type RunTestResult = 'pass' | 'fail' | 'timeout';
 
 export interface RunSession {
   run_id: string;
@@ -8,6 +9,10 @@ export interface RunSession {
   priority: RunPriority;
   agent: string;
   model: string;
+  context_pack_id?: string;
+  sandbox_path?: string;
+  last_test_run_at?: string;
+  last_test_result?: RunTestResult | null;
   created_at: string;
   updated_at: string;
   error_message?: string;
@@ -25,6 +30,10 @@ export interface RunSessionCreateInput {
 export interface RunSessionUpdateInput {
   status?: RunStatus;
   priority?: RunPriority;
+  context_pack_id?: string;
+  sandbox_path?: string;
+  last_test_run_at?: string;
+  last_test_result?: RunTestResult | null;
   error_message?: string;
 }
 
